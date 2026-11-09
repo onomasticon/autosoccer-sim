@@ -61,3 +61,4 @@ export class TelemetryRecorder {
     return this.records.map((r) => JSON.stringify(r)).join("\n") + "\n";
   }
 }
+export * from "./replay.ts";

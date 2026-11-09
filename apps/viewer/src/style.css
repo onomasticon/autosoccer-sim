@@ -57,3 +57,29 @@ aside { width: 360px; }
 .editor textarea { width: 100%; height: 150px; background: #0d1117; color: #e6edf3; font: 11px ui-monospace, monospace; border: 1px solid #30363d; border-radius: 6px; box-sizing: border-box; }
 .decision { background: #0d1117; border-radius: 6px; padding: 4px 8px; margin: 4px 0; color: #e6edf3; }
 .decision b { color: #ffd54f; text-transform: uppercase; font-size: 11px; letter-spacing: .5px; }
+.timeline { width: 1008px; margin-top: 8px; background: #1b232c; border-radius: 8px; padding: 6px 10px; box-sizing: border-box; }
+.tl-head { display: flex; gap: 12px; align-items: baseline; margin-bottom: 4px; }
+.tl-track { position: relative; height: 22px; background: #0d1117; border-radius: 4px; overflow: hidden; }
+.tl-track.seekable { cursor: pointer; }
+.tl-band { position: absolute; top: 0; bottom: 0; background: repeating-linear-gradient(45deg, #263238, #263238 4px, #1b232c 4px, #1b232c 8px); }
+.tl-mark { position: absolute; top: 3px; width: 3px; height: 16px; border-radius: 1px; transform: translateX(-1px); }
+.tl-mark.goal { top: 0; width: 6px; height: 22px; transform: translateX(-3px); box-shadow: 0 0 6px #ffd54f; }
+.tl-mark.catch, .tl-mark.tackle { top: 14px; height: 6px; width: 2px; opacity: .7; }
+.tl-head-mark { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; box-shadow: 0 0 4px #fff; }
+.tl-scrub { width: 100%; margin: 4px 0 0; }
+.tl-chips { display: flex; flex-wrap: nowrap; gap: 4px; overflow-x: auto; margin-top: 4px; padding-bottom: 2px; }
+.chip { font-size: 11px; padding: 2px 7px; border-radius: 10px; background: #2b3440; white-space: nowrap; font-weight: 500; }
+.chip.goal { background: #8d6e00; color: #fff; font-weight: 700; }
+.chip.foul { background: #6d1f1f; }
+.chip:disabled { opacity: .75; cursor: default; }
+.action-log .al { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.al.issued b { color: #90caf9; }
+.al.invalid b { color: #ffb74d; }
+.al.rejected b { color: #ff7b72; }
+.al.executed b { color: #3fb950; }
+.pitch-wrap.fit canvas { width: calc(100vw - 440px) !important; height: auto !important; }
+.pitch-wrap.fit .timeline, .pitch-wrap.fit .ctrl-panel { width: calc(100vw - 440px); }
+.replay-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.filebtn { background: #2d6cdf; color: #fff; border-radius: 6px; padding: 6px 12px; font-weight: 600; cursor: pointer; }
+@keyframes goalpulse { 0% { transform: translateX(-50%) scale(1); } 50% { transform: translateX(-50%) scale(1.15); } 100% { transform: translateX(-50%) scale(1); } }
+.banner.goal { background: #b8860b; animation: goalpulse .6s ease-in-out infinite; font-size: 20px; }

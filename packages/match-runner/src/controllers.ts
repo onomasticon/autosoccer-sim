@@ -5,6 +5,8 @@ import { CommandRunner, createSandboxedController, type ControllerDiagnostic, ty
 import type { ConfigOverrides, LoggedEvent, WorldState } from "@autosoccer/sim-core";
 import { makeConfig, Simulation } from "@autosoccer/sim-core";
 import { analyzeMatch, sampleState, type Sample, type TeamStats } from "./stats.ts";
+import { ReplayRecorder, type ReplayFile } from "@autosoccer/telemetry";
+import { buildReplay } from "./record.ts";
 
 export interface ControllerMatchOptions {
   seed: number;
@@ -14,6 +16,8 @@ export interface ControllerMatchOptions {
   limits?: Partial<SandboxLimits>;
   /** Stop early after this many ticks (default: until full time). */
   maxTicks?: number;
+  /** Build a replay file (snapshots + hashes + decisions). */
+  record?: boolean;
 }
 
 export interface ControllerMatchResult {
@@ -25,6 +29,7 @@ export interface ControllerMatchResult {
   finalHash: string;
   wallMs: number;
   samples: Sample[];
+  replay: ReplayFile | null;
   profile: Record<"blue" | "red", TeamStats>;
   stats: Record<"blue" | "red", { kicks: number; tackles: number; catches: number; goals: number; engineRejected: number; invalidActions: number; failures: number; disabled: boolean; avgOps: number }>;
 }
@@ -38,11 +43,15 @@ export async function runControllerMatch(o: ControllerMatchOptions): Promise<Con
   const t0 = performance.now();
   const max = o.maxTicks ?? 200_000;
   const samples: Sample[] = [];
+  const recorder = o.record ? new ReplayRecorder() : null;
+  recorder?.observe(sim.state);
   while (!sim.clock.finished && sim.state.tick < max) {
     const s = runner.tick();
+    recorder?.observe(s);
     if (s.tick % 60 === 0 && (s.match.period === "firstHalf" || s.match.period === "secondHalf")) samples.push(sampleState(s, config));
   }
   const wallMs = performance.now() - t0;
+  const replay = recorder ? buildReplay(sim, recorder, { blue, red }) : null;
   runner.dispose();
   const team = (id: string | null | undefined) => (id?.startsWith("blue") ? "blue" : "red");
   const ev = sim.events as readonly LoggedEvent[];
@@ -66,6 +75,7 @@ export async function runControllerMatch(o: ControllerMatchOptions): Promise<Con
     finalHash: sim.hash(),
     wallMs,
     samples,
+    replay,
     profile: analyzeMatch(sim.events, samples, config),
     stats: { blue: stat("blue", blue), red: stat("red", red) },
   };

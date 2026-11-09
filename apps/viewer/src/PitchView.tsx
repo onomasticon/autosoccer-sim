@@ -73,6 +73,7 @@ function drawPitch(g: Graphics, cfg: SimConfig): void {
 export function PitchView({ state, events, debug, config, selected, overlays, onSelect }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const appRef = useRef<{ app: Application; dyn: Graphics; labels: Container; texts: Map<string, Text> } | null>(null);
+  const trail = useRef<Array<{ tick: number; x: number; y: number }>>([]);
   const propsRef = useRef<Props>({ state, events, debug, config, selected, overlays, onSelect });
   propsRef.current = { state, events, debug, config, selected, overlays, onSelect };
 
@@ -241,6 +242,30 @@ export function PitchView({ state, events, debug, config, selected, overlays, on
         r.texts.set(pl.id, t);
       }
       t.position.set(x, y - pr - 2);
+    }
+
+    // Ball trail (last ~0.6 s), reset when time jumps backwards (reset/seek).
+    const tr = trail.current;
+    if (tr.length && (s.tick < tr[tr.length - 1]!.tick || s.tick - tr[tr.length - 1]!.tick > 120)) tr.length = 0;
+    if (!tr.length || tr[tr.length - 1]!.tick !== s.tick) tr.push({ tick: s.tick, x: s.ball.x, y: s.ball.y });
+    while (tr.length > 36) tr.shift();
+    tr.forEach((q, i) => {
+      if (s.tick - q.tick > 36) return;
+      const [tx, ty] = p(q.x, q.y);
+      g.circle(tx, ty, 1.5 + (i / tr.length) * 2.5).fill({ color: 0xffffff, alpha: (i / tr.length) * 0.35 });
+    });
+
+    // Goal animation: expanding rings from the goal mouth for 2 s.
+    if (s.match.phase === "goalScored" && s.ball.inGoal) {
+      const goalEv = [...evs].reverse().find((e) => e.event.type === "goalScored");
+      const elapsed = goalEv ? s.tick - goalEv.tick : 0;
+      const [gx, gy] = p((s.ball.inGoal === "left" ? -1 : 1) * c.pitch.length / 2, 0);
+      for (let k = 0; k < 3; k++) {
+        const e = elapsed - k * 15;
+        if (e < 0) continue;
+        const rad = 10 + e * 1.6;
+        g.circle(gx, gy, rad).stroke({ width: 4, color: 0xffd54f, alpha: Math.max(0, 1 - e / 110) });
+      }
     }
 
     const [bx, by] = p(s.ball.x, s.ball.y);

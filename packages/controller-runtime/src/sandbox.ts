@@ -140,6 +140,8 @@ export interface SandboxedControllerOptions {
 export class SandboxedController implements CommandSource {
   readonly team: TeamId;
   readonly label: string;
+  /** FNV-1a of the script source, recorded in replays to identify the exact code. */
+  readonly sourceHash: string;
   name: string;
   version: string | null = null;
   readonly diagnostics: ControllerDiagnostic[] = [];
@@ -152,6 +154,8 @@ export class SandboxedController implements CommandSource {
   readonly actionCounts: Record<string, number> = {};
   /** Lifecycle callbacks that completed successfully. */
   readonly lifecycleCalls: Record<string, number> = { initialize: 0, update: 0, onMatchEnd: 0 };
+  /** Every decision this match (for replays): issued actions, validation rejections, mode/notes. */
+  readonly history: DecisionRecord[] = [];
   private rt: QuickJSRuntime;
   private ctx: QuickJSContext;
   private ops = 0;
@@ -168,6 +172,9 @@ export class SandboxedController implements CommandSource {
   constructor(qjs: QuickJSWASMModule, opts: SandboxedControllerOptions) {
     this.team = opts.team;
     this.label = opts.label ?? `${opts.team} controller`;
+    let h = 0x811c9dc5;
+    for (let i = 0; i < opts.source.length; i++) h = Math.imul(h ^ opts.source.charCodeAt(i), 0x01000193) >>> 0;
+    this.sourceHash = h.toString(16).padStart(8, "0");
     this.name = this.label;
     this.cfg = opts.config ?? DEFAULT_CONFIG;
     this.limits = { ...DEFAULT_LIMITS, ...opts.limits };
@@ -297,6 +304,7 @@ export class SandboxedController implements CommandSource {
     if (this.disabled) {
       const cmds = this.fallback.decide(dc);
       this.last = { tick, actions: null, commands: [...cmds], rejected: [], opsUsed: 0, status: "fallback" };
+      this.history.push(this.last);
       return cmds;
     }
     if (!inPlay) return [];
@@ -310,6 +318,7 @@ export class SandboxedController implements CommandSource {
     if (!r.ok) {
       this.fail(tick, r.kind, `update: ${r.message}`);
       this.last = { tick, actions: null, commands: [], rejected: [], opsUsed, status: "failed" };
+      this.history.push(this.last);
       return this.disabled ? this.fallback.decide(dc) : [];
     }
     if (r.value.length > this.limits.maxOutputBytes) {
@@ -336,6 +345,7 @@ export class SandboxedController implements CommandSource {
     const rawDebug = !Array.isArray(parsed) ? (parsed as { debug?: unknown })?.debug : undefined;
     const debug = rawDebug !== undefined && JSON.stringify(rawDebug).length <= MAX_DEBUG_BYTES ? sanitizeDebug(rawDebug) : null;
     this.last = { tick, actions, commands: t.commands, rejected: t.rejected, opsUsed, status: "ok", debug };
+    this.history.push(this.last);
     return t.commands;
   }
 

@@ -9,9 +9,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@autosoccer/sim-core": "workspace:*",
-    "@autosoccer/controller-sdk": "workspace:*",
     "@autosoccer/controller-runtime": "workspace:*",
+    "@autosoccer/controller-sdk": "workspace:*",
+    "@autosoccer/sim-core": "workspace:*",
     "@autosoccer/telemetry": "workspace:*"
   }
 }
