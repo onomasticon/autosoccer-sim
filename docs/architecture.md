@@ -1,4 +1,4 @@
-# Architecture (M1)
+# Architecture (M2)
 
 ```
             ┌────────────────────┐        ┌──────────────────────┐
@@ -23,8 +23,16 @@
   as `CommandLogEntry { tick, commands }`. That log is the full input stream:
   `Simulation.replay(seed, log, toTick)` reproduces the state without any script or keyboard.
 - **`hashState(state)`** is a 64-bit FNV-1a-style hash over the exact IEEE-754 bits of all state.
-- **Versioning:** `ENGINE_VERSION` (sim-core) and `SDK_VERSION` (controller-sdk) are `0.1.0`. The
-  M1 command schema (`moveTo`, `stop`) is internal/debug; the public controller action schema is M4.
+- **`step` order of operations:** commands → cooldowns → one-shot actions (arbitrated) → player
+  movement and collisions → automatic touches (trap/dribble) → held ball, or a sub-stepped free
+  ball. Each tick's `SimEvent`s are in `state.events`. `Simulation.events` logs them with tick and
+  ball position, and `Simulation.rejections` logs rejected commands with reasons.
+- **Scenario harness:** `controller-runtime/src/scenarios.ts` holds scripted command sources (debug
+  placement, then ordinary commands at given times or conditions). The viewer, tests and walkthrough
+  all use the same scenarios.
+- **Versioning:** `ENGINE_VERSION` is `0.2.0` (M2 adds action commands and fields to `WorldState`).
+  `SDK_VERSION` is `0.1.0`. The command schema is still engine-internal; the public, versioned
+  controller action schema is M4.
 
 ## Determinism
 

@@ -3,10 +3,10 @@
 Deterministic 5v5 2D soccer simulation with scriptable team controllers.
 Headless TypeScript engine, Bun workspace, React + PixiJS viewer.
 
-> **Status: M1** — project foundation + deterministic visual physics playground.
+> **Status: M2** — physical soccer actions + interactive debug inspector (on top of the M1 deterministic foundation).
 > Roadmap: see the milestone issues (M1–M7).
 
-![viewer](docs/media/m1/02-playing.png)
+![viewer](docs/media/m2/01-playground.png)
 
 ## Quickstart
 
@@ -20,9 +20,13 @@ bun run test                      # Vitest (Node/V8) + golden hashes under Bun/J
 bun run typecheck
 ```
 
-Viewer controls: **Space** play/pause · **.** single step · click a player to inspect ·
-**Manual** mode + **WASD/arrows** (+ **Shift** to sprint) drives the selected player ·
-**Verify determinism** replays the recorded command stream and compares state hashes.
+Viewer controls: **Space** play/pause · **.** single step · click a player to inspect (shows its
+kick/tackle/catch ranges) · **Run scenario** plays a scripted demo of one action (pass, dribble,
+interception, tackle, shot/goal, keeper catch & release, rejected kicks, rejected catches) ·
+**Manual** mode: **WASD/arrows** move the selected player, **Shift** sprint, **E** toggle dribble,
+**J** kick (Shift = hard), **K** tackle, **L** catch/release · **Verify determinism** replays the
+recorded command stream and compares state hashes. The event log shows executed actions and
+rejected commands with reasons.
 
 ## Layout
 
@@ -40,6 +44,7 @@ See [docs/architecture.md](docs/architecture.md) and [docs/simulation.md](docs/s
 
 ## Walkthrough recording
 
-`bun run dev` in one terminal, then `bun run walkthrough` records `docs/media/m1/walkthrough.mp4`,
-a GIF preview and screenshots by driving the real viewer with Playwright. The script fails if
-run-to-run or browser-vs-headless hashes differ.
+`bun run dev` in one terminal, then `bun run walkthrough` records `docs/media/m2/walkthrough.mp4`,
+a GIF preview and screenshots by driving the real viewer with Playwright (`bun run walkthrough:m1`
+for the M1 recording). The script fails if an expected scenario event/rejection is missing or if
+browser and headless hashes differ.

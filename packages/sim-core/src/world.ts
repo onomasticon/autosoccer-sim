@@ -17,6 +17,11 @@ const FORMATION: ReadonlyArray<{ number: number; role: Role; fx: number; fy: num
 
 export const TEAMS: readonly TeamId[] = ["blue", "red"];
 
+/** Which goal a team defends (no side switch until M3). */
+export function defendedSide(team: TeamId): "left" | "right" {
+  return team === "blue" ? "left" : "right";
+}
+
 export function playerId(team: TeamId, n: number): PlayerId {
   return `${team}-${n}` as PlayerId;
 }
@@ -45,7 +50,11 @@ export function createWorld(seed: number, config: SimConfig = DEFAULT_CONFIG): W
         vy: 0,
         heading: team === "blue" ? 0 : Math.PI,
         stamina: 1,
-        intent: { targetX: null, targetY: null, sprint: false },
+        intent: { targetX: null, targetY: null, sprint: false, dribble: false },
+        touchCooldown: 0,
+        tackleCooldown: 0,
+        catchCooldown: 0,
+        stunned: 0,
       });
     }
   }
@@ -54,7 +63,8 @@ export function createWorld(seed: number, config: SimConfig = DEFAULT_CONFIG): W
     tick: 0,
     rng: rng.state,
     players,
-    ball: { x: 0, y: 0, vx: 0, vy: 0 },
+    ball: { x: 0, y: 0, vx: 0, vy: 0, heldBy: null, holdTicks: 0, lastTouch: null, inGoal: null },
     contacts: { playerPlayer: 0, playerBall: 0, ballWall: 0 },
+    events: [],
   };
 }

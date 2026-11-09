@@ -28,7 +28,8 @@ function player(s: WorldState, id: PlayerId) {
 }
 
 /** World with all players parked far from each other and a custom placement for some. */
-function isolatedWorld(overrides: Partial<Record<PlayerId, { x: number; y: number }>> = {}, ball = { x: 0, y: 14, vx: 0, vy: 0 }): WorldState {
+function isolatedWorld(overrides: Partial<Record<PlayerId, { x: number; y: number }>> = {}, b: { x: number; y: number; vx: number; vy: number } = { x: 0, y: 14, vx: 0, vy: 0 }): WorldState {
+  const ball = { heldBy: null, holdTicks: 0, lastTouch: null, inGoal: null, ...b };
   const base = createWorld(1);
   return {
     ...base,
@@ -69,7 +70,7 @@ describe("world", () => {
       "red-1", "red-2", "red-3", "red-4", "red-5",
     ]);
     expect(w.players.filter((p) => p.role === "GK")).toHaveLength(2);
-    expect(w.ball).toEqual({ x: 0, y: 0, vx: 0, vy: 0 });
+    expect(w.ball).toEqual({ x: 0, y: 0, vx: 0, vy: 0, heldBy: null, holdTicks: 0, lastTouch: null, inGoal: null });
     for (const p of w.players) {
       expect(Math.abs(p.x)).toBeLessThan(DEFAULT_CONFIG.pitch.length / 2);
       expect(Math.abs(p.y)).toBeLessThan(DEFAULT_CONFIG.pitch.width / 2);

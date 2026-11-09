@@ -16,9 +16,10 @@
     "headless": "bun packages/match-runner/src/cli.ts",
     "test": "vitest run && bun scripts/golden.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "walkthrough": "node scripts/record-walkthrough.mjs",
+    "walkthrough": "node scripts/walkthrough-m2.mjs",
     "test:unit": "vitest run",
-    "golden:write": "bun scripts/golden.ts --write"
+    "golden:write": "bun scripts/golden.ts --write",
+    "walkthrough:m1": "node scripts/record-walkthrough.mjs"
   },
   "devDependencies": {
     "@autosoccer/controller-runtime": "workspace:*",

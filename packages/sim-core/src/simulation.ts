@@ -3,13 +3,21 @@ import { DEFAULT_CONFIG, ticksPerDecision } from "./config.ts";
 import type { CommandRejection, EngineCommand } from "./commands.ts";
 import { hashState } from "./hash.ts";
 import { step } from "./step.ts";
-import type { WorldState } from "./types.ts";
+import type { SimEvent, WorldState } from "./types.ts";
 import { createWorld } from "./world.ts";
 
 /** Commands accepted at a specific decision tick. This is the input stream. */
 export interface CommandLogEntry {
   readonly tick: number;
   readonly commands: readonly EngineCommand[];
+}
+
+/** An event with the tick it happened on and where the ball was at the start of that tick. */
+export interface LoggedEvent {
+  readonly tick: number;
+  readonly event: SimEvent;
+  readonly ballX: number;
+  readonly ballY: number;
 }
 
 export interface MatchClock {
@@ -48,6 +56,7 @@ export class Simulation {
   private pending: unknown[] = [];
   private _log: CommandLogEntry[] = [];
   private _rejections: Array<CommandRejection & { tick: number }> = [];
+  private _events: LoggedEvent[] = [];
 
   constructor(seed: number, config: SimConfig = DEFAULT_CONFIG) {
     this.config = config;
@@ -62,6 +71,9 @@ export class Simulation {
   }
   get rejections(): ReadonlyArray<CommandRejection & { tick: number }> {
     return this._rejections;
+  }
+  get events(): readonly LoggedEvent[] {
+    return this._events;
   }
   get clock(): MatchClock {
     return clockOf(this.state.tick, this.config);
@@ -89,6 +101,7 @@ export class Simulation {
       if (accepted.length > 0) this._log.push({ tick: this.state.tick, commands: accepted });
       for (const r of rejected) this._rejections.push({ ...r, tick: this.state.tick });
     }
+    for (const e of state.events) this._events.push({ tick: this.state.tick, event: e, ballX: this.state.ball.x, ballY: this.state.ball.y });
     this.state = state;
     return state;
   }
@@ -103,6 +116,7 @@ export class Simulation {
     this.pending = [];
     this._log = [];
     this._rejections = [];
+    this._events = [];
   }
 
   /**

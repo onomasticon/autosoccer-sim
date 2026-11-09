@@ -35,10 +35,19 @@ export function hashState(s: WorldState): string {
     num(p.intent.targetX ?? Number.NaN);
     num(p.intent.targetY ?? Number.NaN);
     byte(p.intent.sprint ? 1 : 0);
+    byte(p.intent.dribble ? 1 : 0);
+    num(p.touchCooldown);
+    num(p.tackleCooldown);
+    num(p.catchCooldown);
+    num(p.stunned);
   }
   num(s.ball.x);
   num(s.ball.y);
   num(s.ball.vx);
   num(s.ball.vy);
+  str(s.ball.heldBy ?? "-");
+  num(s.ball.holdTicks);
+  str(s.ball.lastTouch ?? "-");
+  str(s.ball.inGoal ?? "-");
   return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
 }
