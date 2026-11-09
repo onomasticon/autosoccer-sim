@@ -22,7 +22,8 @@ import type { QuickJSContext, QuickJSRuntime, QuickJSWASMModule } from "quickjs-
 import { newQuickJSWASMModuleFromVariant } from "quickjs-emscripten-core";
 import variant from "@jitl/quickjs-singlefile-mjs-release-sync";
 import type { CommandSource, DecisionContext } from "@autosoccer/controller-sdk";
-import { buildMatchInfo, buildMatchResult, buildObservation, translateActions } from "@autosoccer/controller-sdk";
+import type { ControllerDebug } from "@autosoccer/controller-sdk";
+import { buildMatchInfo, buildMatchResult, buildObservation, HELPERS_SOURCE, MAX_DEBUG_BYTES, sanitizeDebug, translateActions } from "@autosoccer/controller-sdk";
 import type { EngineCommand, SimConfig, TeamId, WorldState } from "@autosoccer/sim-core";
 import { DEFAULT_CONFIG } from "@autosoccer/sim-core";
 import { createSafeController } from "./restarts.ts";
@@ -83,6 +84,8 @@ export interface DecisionRecord {
   rejected: Array<{ action: unknown; reason: string }>;
   opsUsed: number;
   status: "ok" | "failed" | "fallback";
+  /** Optional decision trace returned by the controller (SDK ≥ 1.1). */
+  debug?: ControllerDebug | null;
 }
 
 const BOOTSTRAP = `
@@ -145,6 +148,10 @@ export class SandboxedController implements CommandSource {
   failuresInARow = 0;
   totalOps = 0;
   updates = 0;
+  /** Count of raw actions returned by the script, by type (for API coverage). */
+  readonly actionCounts: Record<string, number> = {};
+  /** Lifecycle callbacks that completed successfully. */
+  readonly lifecycleCalls: Record<string, number> = { initialize: 0, update: 0, onMatchEnd: 0 };
   private rt: QuickJSRuntime;
   private ctx: QuickJSContext;
   private ops = 0;
@@ -174,6 +181,7 @@ export class SandboxedController implements CommandSource {
     });
     this.ctx = this.rt.newContext();
     this.evalOrFail(BOOTSTRAP, "bootstrap", this.limits.opsInitialize);
+    if (this.loadError === null) this.evalOrFail(HELPERS_SOURCE, "soccer-helpers", this.limits.opsInitialize);
     if (this.loadError === null) this.evalOrFail(opts.source, this.label, this.limits.opsInitialize);
     if (this.loadError === null) {
       const meta = this.callRaw("__meta", [], this.limits.opsInitialize);
@@ -280,7 +288,10 @@ export class SandboxedController implements CommandSource {
       const r = this.callRaw("__call", ["initialize", JSON.stringify(buildMatchInfo(state, this.team, this.cfg))], this.limits.opsInitialize);
       this.drainLogs(tick);
       if (!r.ok) this.fail(tick, r.kind, `initialize: ${r.message}`, true);
-      else this.diag(tick, "lifecycle", "initialize ok");
+      else {
+        this.diag(tick, "lifecycle", "initialize ok");
+        this.lifecycleCalls.initialize!++;
+      }
     }
 
     if (this.disabled) {
@@ -314,10 +325,17 @@ export class SandboxedController implements CommandSource {
       return [];
     }
     const t = translateActions(parsed, this.team, state);
+    this.lifecycleCalls.update!++;
+    for (const a of Array.isArray(parsed) ? parsed : ((parsed as { actions?: unknown[] })?.actions ?? [])) {
+      const ty = String((a as { type?: unknown } | null)?.type);
+      this.actionCounts[ty] = (this.actionCounts[ty] ?? 0) + 1;
+    }
     for (const rj of t.rejected) this.diag(tick, "invalid-action", rj.reason, rj.action);
     this.failuresInARow = 0;
     const actions = Array.isArray(parsed) ? parsed : ((parsed as { actions?: unknown[] })?.actions ?? []);
-    this.last = { tick, actions, commands: t.commands, rejected: t.rejected, opsUsed, status: "ok" };
+    const rawDebug = !Array.isArray(parsed) ? (parsed as { debug?: unknown })?.debug : undefined;
+    const debug = rawDebug !== undefined && JSON.stringify(rawDebug).length <= MAX_DEBUG_BYTES ? sanitizeDebug(rawDebug) : null;
+    this.last = { tick, actions, commands: t.commands, rejected: t.rejected, opsUsed, status: "ok", debug };
     return t.commands;
   }
 
@@ -328,7 +346,10 @@ export class SandboxedController implements CommandSource {
     const r = this.callRaw("__call", ["onMatchEnd", JSON.stringify(buildMatchResult(state, this.team))], this.limits.opsMatchEnd);
     this.drainLogs(state.tick);
     if (!r.ok) this.diag(state.tick, r.kind, `onMatchEnd: ${r.message}`);
-    else this.diag(state.tick, "lifecycle", "onMatchEnd ok");
+    else {
+      this.diag(state.tick, "lifecycle", "onMatchEnd ok");
+      this.lifecycleCalls.onMatchEnd!++;
+    }
   }
 
   dispose(): void {

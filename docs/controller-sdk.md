@@ -1,6 +1,9 @@
-# Controller SDK reference (v1.0)
+# Controller SDK reference (v1.1)
 
-`SDK_VERSION 1.0.0` · observation schema `1.0` · action schema `1.0` · engine `0.3.0`
+`SDK_VERSION 1.1.0` · observation schema `1.0` · action schema `1.0` · engine `0.3.0`
+
+**1.1** adds two things and changes nothing else: the built-in `Soccer` helper library, and an
+optional `debug` decision trace returned from `update`.
 
 A controller is a plain JavaScript file that drives one team's five players through this API. It
 runs in a sandbox. Everything it sees is JSON built from the world state, and everything it returns
@@ -89,6 +92,43 @@ most one ball action (`kick`, `tackle`, `catchBall` or `releaseBall`); extra one
 Opponents are kept 4 m away (the centre circle at kickoffs). If the taker hasn't kicked within
 `decisionsUntilFallback` updates, the engine takes the restart for you.
 
+## Decision trace (`debug`, SDK ≥ 1.1)
+
+`update` may return `{ actions, debug }`. The `debug` object is optional, capped at 4 KB, and
+never affects the simulation. The viewer shows the mode and notes in the controller inspector and
+draws the lines on the pitch.
+
+```js
+return {
+  actions,
+  debug: {
+    mode: "build-up",                                   // current tactical mode
+    notes: ["blue-4 → blue-2 pass (value 4.1)"],        // up to 6 short notes
+    lines: [{ from: obs.ball, to: { x: 10, y: 4 }, kind: "pass" }],  // pass|shot|run|press|cover, up to 12
+  },
+};
+```
+
+## Helpers (`Soccer`, SDK ≥ 1.1)
+
+A frozen global with pure, deterministic helpers, available before your script runs:
+
+| Helper | Returns |
+| --- | --- |
+| `Soccer.dist(a, b)`, `len(x, y)`, `norm(x, y)`, `clamp`, `lerp` | geometry basics |
+| `Soccer.oppGoal(obs)`, `ownGoal(obs)`, `forward(obs, p)` | goal centres this half; how far "up the pitch" a point is for you |
+| `Soccer.inOwnBox(obs, p)`, `inOppBox(obs, p)` | penalty-area tests |
+| `Soccer.ballAt(ball, t)` | where a free ball will be after `t` s (engine friction model) |
+| `Soccer.rollDistance(v0, vEnd)`, `kickPowerFor(d, arriveSpeed, rules)` | pass weight: the power that makes the ball arrive at distance `d` with `arriveSpeed` |
+| `Soccer.timeToReach(p, q, rules, sprint)`, `interceptPoint(p, ball, rules, maxT)` | earliest point on the ball's path that `p` can reach |
+| `Soccer.laneClearance(from, to, opponents)` | how open a passing or shooting lane is (m) |
+| `Soccer.pressure(p, players)`, `nearest(players, pt)` | closest-opponent distance; nearest player |
+| `Soccer.facingOk(p, dx, dy, rules)` | whether a kick in that direction would pass the facing check |
+| `Soccer.approachAndKick(p, ball, target, power, rules, opts)` | actions that go round behind the ball, then kick it to `target` once legal |
+| `Soccer.possession(obs)` | `{ side: "own"|"opp"|null, player }` |
+| `Soccer.shotTarget(obs)` | a point inside the goal, away from the keeper |
+| `Soccer.ourTaker(obs)` | your designated restart taker, or `null` |
+
 ## Validation and diagnostics
 
 Every action goes through two layers:
@@ -135,6 +175,9 @@ Bun, Node and in the browser viewer.
 | --- | --- |
 | `dumb.js` | Minimal controller: everyone chases the ball and kicks at goal. |
 | `api-probe.js` | Exercises every action type and every lifecycle callback, and logs coverage. |
+| `blue-possession.js` | **Featured (M5):** possession team: short passing, support shape, runs in behind, high press, score adaptation. See [tactics.md](tactics.md). |
+| `red-counter.js` | **Featured (M5):** low block, interceptions, fast direct counters, long keeper releases, score adaptation. |
+| `random.js` | Naive random baseline, for robustness tests. |
 | `chaser.js` | Aggressive pressing and tackling, with dribbles and shots. |
 | `zonal.js` | Compact shape, a single engager, forward passes. |
 | `adversarial/*.js` | Infinite loop, memory hog, throws, bad `initialize`, invalid actions, escape attempts. Used by the tests and the walkthrough. |

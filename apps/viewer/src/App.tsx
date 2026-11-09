@@ -59,12 +59,16 @@ export function App() {
   useEffect(() => {
     // Default: two sandboxed example controllers (needs the QuickJS WASM module first).
     const params = new URLSearchParams(location.search);
-    const blue = params.get("blue") ?? "chaser.js";
-    const red = params.get("red") ?? "zonal.js";
+    const blue = params.get("blue") ?? "blue-possession.js";
+    const red = params.get("red") ?? "red-counter.js";
     engine.init().then(() => {
-      engine.setScript("blue", { label: blue, source: PRESETS[blue] ?? PRESETS["chaser.js"]! }, false);
-      engine.setScript("red", { label: red, source: PRESETS[red] ?? PRESETS["zonal.js"]! }, false);
+      engine.setScript("blue", { label: blue, source: PRESETS[blue] ?? PRESETS["blue-possession.js"]! }, false);
+      engine.setScript("red", { label: red, source: PRESETS[red] ?? PRESETS["red-counter.js"]! }, false);
       if (params.get("mode") !== "script") engine.setMode("controllers");
+      // One-command demo: ?demo=1 (or ?autoplay=1&speed=4) starts the match immediately.
+      if (params.get("speed")) engine.setSpeed(Number(params.get("speed")));
+      else if (params.get("demo")) engine.setSpeed(4);
+      if (params.get("autoplay") || params.get("demo")) engine.play();
       (window as unknown as { __ready: boolean }).__ready = true;
     });
   }, [engine]);
@@ -124,7 +128,7 @@ export function App() {
     <div className="app">
       <header>
         <h1>autosoccer-sim</h1>
-        <span className="muted">engine v{ENGINE_VERSION} · M4 controller SDK + sandbox</span>
+        <span className="muted">engine v{ENGINE_VERSION} · M5 Blue possession vs Red counter</span>
         <div className="scoreboard" data-testid="scoreboard">
           <span className="team blue">BLUE {s.match.defends.blue === "left" ? "→" : "←"}</span>
           <span className="score" data-testid="score">{s.match.score.blue} – {s.match.score.red}</span>
@@ -139,7 +143,7 @@ export function App() {
       <main>
         <div className="pitch-wrap">
           {banner(s) && <div className="banner" data-testid="banner">{banner(s)}</div>}
-        <PitchView state={s} events={sim.events} config={sim.config} selected={engine.selected} overlays={engine.overlays} onSelect={(id) => engine.select(id)} />
+        <PitchView state={s} events={sim.events} debug={engine.mode === "controllers" && engine.overlays ? { blue: engine.controllers.blue?.last?.debug ?? null, red: engine.controllers.red?.last?.debug ?? null } : null} config={sim.config} selected={engine.selected} overlays={engine.overlays} onSelect={(id) => engine.select(id)} />
           {engine.mode === "controllers" && <ControllerPanel engine={engine} />}
         </div>
         <aside>
