@@ -5,7 +5,8 @@
  */
 import type { CommandSource } from "@autosoccer/controller-sdk";
 import type { EngineCommand, PlayerId, SimConfig, Simulation, WorldState } from "@autosoccer/sim-core";
-import { DEFAULT_CONFIG, dcos, dhypot, dsin, inOwnPenaltyArea, isDecisionTick, Rng } from "@autosoccer/sim-core";
+import { attackSign, DEFAULT_CONFIG, dcos, dhypot, dsin, inOwnPenaltyArea, isDecisionTick, Rng } from "@autosoccer/sim-core";
+import { restartCommands } from "./restarts.ts";
 
 export interface SourceDiagnostic {
   readonly tick: number;
@@ -70,15 +71,33 @@ export function createPlaygroundScript(seed: number, config: SimConfig = DEFAULT
     name: "playground",
     team: "both",
     decide({ state, tick }) {
-      if (homes.size === 0) for (const p of state.players) homes.set(p.id, { x: p.x, y: p.y });
-      const out: EngineCommand[] = [];
+      const m = state.match;
+      if (m.period !== "firstHalf" && m.period !== "secondHalf") {
+        homes.clear();
+        return [];
+      }
+      if (homes.size === 0 || m.phase === "kickoff") {
+        homes.clear();
+        for (const p of state.players) homes.set(p.id, { x: p.x, y: p.y });
+      }
+      // Restarts: the designated taker goes to the ball and plays it.
+      const out: EngineCommand[] = restartCommands(state, "both", config);
+      const taker = m.restart?.taker;
       const { ball } = state;
       const replan = tick % 30 === 0;
+      if (m.phase !== "openPlay") {
+        // Dead ball: everyone else drifts back toward their kickoff spots.
+        if (replan) for (const p of state.players) if (p.id !== taker) {
+          const h = homes.get(p.id)!;
+          out.push({ type: "moveTo", playerId: p.id, x: h.x, y: h.y });
+        }
+        return out;
+      }
 
       // Ball actions are considered every decision tick (10 Hz).
       for (const p of state.players) {
         const d = dhypot(ball.x - p.x, ball.y - p.y);
-        const goalX = p.team === "blue" ? 25 : -25;
+        const goalX = attackSign(p.team, m) * (config.pitch.length / 2);
         if (ball.heldBy === p.id) {
           if (state.ball.holdTicks > 60 + rng.int(0, 60)) {
             const mate = state.players.filter((q) => q.team === p.team && q.id !== p.id)[rng.int(0, 4)]!;
@@ -87,7 +106,7 @@ export function createPlaygroundScript(seed: number, config: SimConfig = DEFAULT
           continue;
         }
         if (ball.heldBy !== null) continue;
-        if (p.role === "GK" && d <= ac.catchReach && inOwnPenaltyArea(p.team, ball.x, ball.y, config)) {
+        if (p.role === "GK" && d <= ac.catchReach && inOwnPenaltyArea(p.team, ball.x, ball.y, config, m)) {
           out.push({ type: "catch", playerId: p.id });
           continue;
         }
@@ -123,7 +142,7 @@ export function createPlaygroundScript(seed: number, config: SimConfig = DEFAULT
         const outfield = byDist.filter((p) => p.role !== "GK");
         const chaser = outfield[0]!;
         const support = outfield[1]!;
-        const goalX = team === "blue" ? 25 : -25;
+        const goalX = attackSign(team, m) * (config.pitch.length / 2);
         for (const p of mates) {
           if (p.id === chaser.id) {
             // Aim slightly behind the ball relative to the opponent goal, then dribble at it.
@@ -198,3 +217,4 @@ export function keyboardCommands(state: WorldState, playerId: PlayerId, keys: Ke
 }
 
 export * from "./scenarios.ts";
+export * from "./restarts.ts";

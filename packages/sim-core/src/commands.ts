@@ -1,4 +1,4 @@
-import type { PlayerId } from "./types.ts";
+import type { Period, Phase, PlayerId } from "./types.ts";
 
 /**
  * Engine-level commands. Movement (`moveTo`, `stop`) sets a persistent intent;
@@ -16,10 +16,12 @@ export type EngineCommand =
   | { readonly type: "catch"; readonly playerId: PlayerId }
   | { readonly type: "release"; readonly playerId: PlayerId; readonly dirX: number; readonly dirY: number; readonly power: number }
   | { readonly type: "debugPlaceBall"; readonly x: number; readonly y: number; readonly vx?: number; readonly vy?: number }
-  | { readonly type: "debugPlacePlayer"; readonly playerId: PlayerId; readonly x: number; readonly y: number; readonly heading?: number; readonly stamina?: number };
+  | { readonly type: "debugPlacePlayer"; readonly playerId: PlayerId; readonly x: number; readonly y: number; readonly heading?: number; readonly stamina?: number }
+  /** Force match flow for demos/tests (e.g. jump to open play or to near the end of a half). */
+  | { readonly type: "debugSetMatch"; readonly period?: Period; readonly phase?: Phase; readonly halfTicks?: number; readonly score?: { readonly blue: number; readonly red: number } };
 
 export type ActionCommand = Extract<EngineCommand, { type: "kick" | "tackle" | "catch" | "release" }>;
-export type DebugCommand = Extract<EngineCommand, { type: "debugPlaceBall" | "debugPlacePlayer" }>;
+export type DebugCommand = Extract<EngineCommand, { type: "debugPlaceBall" | "debugPlacePlayer" | "debugSetMatch" }>;
 
 export interface CommandRejection {
   readonly command: unknown;
@@ -41,6 +43,12 @@ export function validateCommand(cmd: unknown): string | null {
   if (c.type === "debugPlaceBall") {
     if (!finite(c.x) || !finite(c.y)) return "x/y must be finite numbers";
     if ((c.vx !== undefined && !finite(c.vx)) || (c.vy !== undefined && !finite(c.vy))) return "vx/vy must be finite numbers";
+    return null;
+  }
+  if (c.type === "debugSetMatch") {
+    if (c.period !== undefined && !["preMatch", "firstHalf", "halftime", "secondHalf", "fullTime"].includes(c.period as string)) return "invalid period";
+    if (c.phase !== undefined && !["stopped", "openPlay"].includes(c.phase as string)) return "debugSetMatch phase must be stopped or openPlay";
+    if (c.halfTicks !== undefined && (!finite(c.halfTicks) || c.halfTicks < 0)) return "halfTicks must be ≥ 0";
     return null;
   }
   if (!isPlayerId(c.playerId)) return "invalid playerId";
@@ -75,5 +83,5 @@ export function isActionCommand(c: EngineCommand): c is ActionCommand {
   return c.type === "kick" || c.type === "tackle" || c.type === "catch" || c.type === "release";
 }
 export function isDebugCommand(c: EngineCommand): c is DebugCommand {
-  return c.type === "debugPlaceBall" || c.type === "debugPlacePlayer";
+  return c.type === "debugPlaceBall" || c.type === "debugPlacePlayer" || c.type === "debugSetMatch";
 }

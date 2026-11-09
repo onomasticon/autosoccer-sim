@@ -51,3 +51,5 @@ export function runHeadless(opts: HeadlessOptions): HeadlessResult {
     realtimeFactor: seconds / (wallMs / 1000),
   };
 }
+
+export * from "./soak.ts";

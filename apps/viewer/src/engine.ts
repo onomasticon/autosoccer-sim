@@ -81,12 +81,12 @@ export class ViewerEngine {
       this.pending = { kick: false, tackle: false, hands: false };
     }
     this.runner.tick();
-    if (this.sim.clock.finished) this.pause();
+    if (this.sim.clock.finished && this.mode !== "scenario") this.pause();
     if (this.mode === "scenario" && this.scenario?.done(this.sim.state.tick)) this.pause();
   }
 
   play(): void {
-    if (this.playing || this.sim.clock.finished) return;
+    if (this.playing || (this.sim.clock.finished && this.mode !== "scenario")) return;
     this.playing = true;
     this.lastTime = performance.now();
     this.acc = 0;

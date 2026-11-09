@@ -95,6 +95,29 @@ export interface ActionConfig {
   maxReleaseSpeed: number;
 }
 
+/** Match flow and restart rules (M3). */
+export interface MatchConfig {
+  /** Ticks between world creation and the opening kickoff. */
+  preMatchTicks: number;
+  /** Ticks the ball stays in the net before the restart kickoff is set up. */
+  goalCelebrationTicks: number;
+  halftimeTicks: number;
+  /** Ticks the ball keeps rolling after leaving play before it is placed for the restart. */
+  outSettleTicks: number;
+  /** Ticks the designated taker has to take a restart before the engine takes it. */
+  restartTimeoutTicks: number;
+  /** Opponents must stay at least this far from the ball at restarts (m). */
+  restartDistance: number;
+  /** Distance of the goal-kick spot in front of the goal line (m). */
+  goalKickSpot: number;
+  /** "running": clock always runs during halves; "stopOnDeadBall": paused while play is dead. */
+  clockPolicy: "running" | "stopOnDeadBall";
+  /** Who kicks off the first half; "seeded" uses the world RNG (coin toss). */
+  firstKickoff: "blue" | "red" | "seeded";
+  /** A failed tackle is a foul when the victim is within this distance of the tackler (m). */
+  foulContactDistance: number;
+}
+
 export interface SimConfig {
   /** Physics steps per second (fixed). */
   tickRate: number;
@@ -107,6 +130,7 @@ export interface SimConfig {
   player: PlayerPhysicsConfig;
   ball: BallPhysicsConfig;
   action: ActionConfig;
+  match: MatchConfig;
   /** Max random offset (m) applied to kickoff formation positions from the seed. */
   formationJitter: number;
 }
@@ -173,6 +197,18 @@ export const DEFAULT_CONFIG: SimConfig = Object.freeze({
     maxHoldTicks: 360,
     maxReleaseSpeed: 22,
   }),
+  match: Object.freeze({
+    preMatchTicks: 60,
+    goalCelebrationTicks: 120,
+    halftimeTicks: 180,
+    outSettleTicks: 45,
+    restartTimeoutTicks: 360,
+    restartDistance: 4,
+    goalKickSpot: 2.5,
+    clockPolicy: "running" as const,
+    firstKickoff: "seeded" as const,
+    foulContactDistance: 1.0,
+  }),
   formationJitter: 0.6,
 }) as SimConfig;
 
@@ -188,6 +224,7 @@ export function makeConfig(overrides: ConfigOverrides = {}): SimConfig {
     player: { ...DEFAULT_CONFIG.player, ...overrides.player },
     ball: { ...DEFAULT_CONFIG.ball, ...overrides.ball },
     action: { ...DEFAULT_CONFIG.action, ...overrides.action },
+    match: { ...DEFAULT_CONFIG.match, ...overrides.match },
   };
   validateConfig(cfg);
   return cfg;
@@ -198,7 +235,8 @@ export function validateConfig(cfg: SimConfig): void {
   if (!Number.isInteger(cfg.controllerRate) || cfg.controllerRate <= 0) throw new Error("controllerRate must be a positive integer");
   if (cfg.tickRate % cfg.controllerRate !== 0) throw new Error("controllerRate must divide tickRate");
   if (cfg.playersPerTeam !== 5) throw new Error("Only 5v5 is supported");
-  if (cfg.halfDurationSec <= 0 || cfg.halves <= 0) throw new Error("match duration must be positive");
+  if (cfg.halfDurationSec <= 0) throw new Error("match duration must be positive");
+  if (cfg.halves !== 2) throw new Error("matches have exactly two halves");
 }
 
 /** Physics ticks between controller decisions (6 at 60 Hz / 10 Hz). */
