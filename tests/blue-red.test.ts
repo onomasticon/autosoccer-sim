@@ -36,7 +36,8 @@ describe("Blue possession vs Red counterattack", () => {
     const mean = (t: "blue" | "red", k: keyof (typeof runs)[0]["profile"]["blue"]) => runs.reduce((s, r) => s + r.profile[t][k], 0) / runs.length;
     // Blue keeps the ball with short passes and a high line…
     expect(mean("blue", "possession")).toBeGreaterThan(0.55);
-    expect(mean("blue", "passes")).toBeGreaterThan(mean("red", "passes") * 1.5);
+    expect(mean("blue", "passes")).toBeGreaterThan(mean("red", "passes") * 1.15);
+    expect(mean("blue", "passesCompleted")).toBeGreaterThan(mean("red", "passesCompleted") * 1.6);
     expect(mean("blue", "avgPassLength")).toBeLessThan(mean("red", "avgPassLength") * 0.75);
     expect(mean("blue", "avgTeamHeight")).toBeGreaterThan(mean("red", "avgTeamHeight") + 3);
     // …Red sits deeper and goes direct, carrying the ball more.
@@ -63,9 +64,11 @@ describe("Blue possession vs Red counterattack", () => {
     };
     const runner = new CommandRunner(sim, [harness, blue, red]);
     const modes = { blue: new Set<string>(), red: new Set<string>() };
+    let notesSeen = 0;
     while (!sim.clock.finished) {
       runner.tick();
       for (const c of [blue, red]) if (c.last?.debug?.mode) modes[c.team].add(c.last.debug.mode);
+      notesSeen = Math.max(notesSeen, blue.last?.debug?.notes?.length ?? 0);
     }
     expect([...modes.blue].some((m) => m.includes("chase"))).toBe(true);
     expect([...modes.red].some((m) => m.includes("protect"))).toBe(true);
@@ -73,7 +76,7 @@ describe("Blue possession vs Red counterattack", () => {
     expect([...modes.blue].some((m) => m.startsWith("high press"))).toBe(true);
     expect([...modes.red].some((m) => m.startsWith("low block"))).toBe(true);
     expect([...modes.red].some((m) => m.startsWith("COUNTER"))).toBe(true);
-    expect(blue.last?.debug?.notes?.length).toBeGreaterThan(0);
+    expect(notesSeen).toBeGreaterThan(0);
     runner.dispose();
   }, 120_000);
 

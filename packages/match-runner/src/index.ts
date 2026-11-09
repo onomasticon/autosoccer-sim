@@ -56,3 +56,4 @@ export * from "./soak.ts";
 export * from "./controllers.ts";
 export * from "./stats.ts";
 export * from "./record.ts";
+export * from "./batch.ts";

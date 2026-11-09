@@ -66,10 +66,26 @@ export const HELPERS_SOURCE = String.raw`
   /** Earliest point on the ball's path that player p can reach first (or null within maxT s). */
   S.interceptPoint = (p, ball, rules, maxT) => {
     maxT = maxT || 3;
-    for (let t = 0; t <= maxT; t += 0.1) {
-      const b = S.ballAt(ball, t);
-      if (Math.abs(b.x) > 25.5 || Math.abs(b.y) > 16.5) return null;
-      if (S.timeToReach(p, b, rules, true) <= t + 0.05) return { x: b.x, y: b.y, t };
+    // Path constants computed once (ballAt per step would redo the logarithm).
+    const v0 = Math.hypot(ball.vx, ball.vy);
+    const ux = v0 > 1e-6 ? ball.vx / v0 : 0, uy = v0 > 1e-6 ? ball.vy / v0 : 0;
+    const k = v0 + A / B, tStop = v0 > 1e-6 ? Math.log(k / (A / B)) / B : 0;
+    const decay = Math.exp(-B * 0.1);
+    let e = 1; // exp(-B t)
+    for (let i = 0, t = 0; t <= maxT + 1e-9; i++, t = i * 0.1, e *= decay) {
+      let x = ball.x, y = ball.y;
+      if (v0 > 1e-6) {
+        const tt = t < tStop ? t : tStop;
+        const ee = t < tStop ? e : Math.exp(-B * tStop);
+        const s = (k * (1 - ee)) / B - (A / B) * tt;
+        x += ux * s;
+        y += uy * s;
+      }
+      if (Math.abs(x) > 25.5 || Math.abs(y) > 16.5) return null;
+      const d = Math.hypot(x - p.x, y - p.y);
+      // Quick reject before the turn-penalty estimate.
+      if (d / rules.sprintSpeed > t + 0.05) continue;
+      if (S.timeToReach(p, { x, y }, rules, true) <= t + 0.05) return { x, y, t };
     }
     return null;
   };

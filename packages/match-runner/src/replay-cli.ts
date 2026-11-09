@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 /**
- * bun run replay <file.replay.json> [--verify] [--timeline] [--at <tick|goal:N|restart:N>]
+ * bun run replay <file.replay.json[.gz]> [--verify] [--timeline] [--at <tick|goal:N|restart:N>]
  * Loads a replay without running any controller.
  */
 import { readFileSync } from "node:fs";
+import { gunzipSync } from "node:zlib";
 import { hashState } from "@autosoccer/sim-core";
 import { parseReplay, ReplayPlayer, timelineMarkers } from "@autosoccer/telemetry";
 
@@ -16,7 +17,8 @@ const arg = (n: string) => {
   const i = process.argv.indexOf(`--${n}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
-const replay = parseReplay(readFileSync(file, "utf8"));
+const raw = readFileSync(file);
+const replay = parseReplay(file.endsWith(".gz") ? gunzipSync(raw).toString("utf8") : raw.toString("utf8"));
 const player = new ReplayPlayer(replay);
 const fmt = (t: number) => `${String(Math.floor(t / 3600)).padStart(2, "0")}:${String(Math.floor((t / 60) % 60)).padStart(2, "0")}`;
 const c = replay.controllers;
