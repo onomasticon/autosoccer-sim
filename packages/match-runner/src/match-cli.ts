@@ -1,0 +1,32 @@
+#!/usr/bin/env bun
+/**
+ * bun run match --blue examples/controllers/chaser.js --red examples/controllers/zonal.js [--seed 42] [--verify] [--log]
+ */
+import { readFileSync } from "node:fs";
+import { hashState, Simulation } from "@autosoccer/sim-core";
+import { runtimeId } from "@autosoccer/telemetry";
+import { runControllerMatch } from "./controllers.ts";
+
+const arg = (n: string) => {
+  const i = process.argv.indexOf(`--${n}`);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+};
+const bluePath = arg("blue") ?? "examples/controllers/chaser.js";
+const redPath = arg("red") ?? "examples/controllers/zonal.js";
+const seed = Number(arg("seed") ?? 42);
+const r = await runControllerMatch({ seed, blue: { source: readFileSync(bluePath, "utf8"), label: bluePath }, red: { source: readFileSync(redPath, "utf8"), label: redPath } });
+const m = r.state.match;
+console.log(`runtime   ${runtimeId()} · seed ${seed}`);
+console.log(`blue      ${r.blue.name}${r.blue.version ? ` v${r.blue.version}` : ""}  (${bluePath})`);
+console.log(`red       ${r.red.name}${r.red.version ? ` v${r.red.version}` : ""}  (${redPath})`);
+console.log(`result    ${m.period} · blue ${m.score.blue} – ${m.score.red} red · ${r.state.tick} ticks · ${r.wallMs.toFixed(0)} ms`);
+for (const t of ["blue", "red"] as const) console.log(`${t.padEnd(9)} ${JSON.stringify(r.stats[t])}`);
+const important = r.diagnostics.filter((d) => d.kind !== "engine-rejected" && d.kind !== "invalid-action" && d.kind !== "log");
+for (const d of important.slice(0, 20)) console.log(`  [${d.team} t=${d.tick}] ${d.kind}: ${d.message}`);
+if (process.argv.includes("--log")) for (const d of r.diagnostics.filter((x) => x.kind === "log").slice(0, 40)) console.log(`  [${d.team} t=${d.tick}] ${d.message}`);
+console.log(`hash      ${r.finalHash}`);
+if (process.argv.includes("--verify")) {
+  const h = hashState(Simulation.replay(seed, r.sim.log, r.state.tick, r.sim.config));
+  console.log(`replay    ${h}  ${h === r.finalHash ? "MATCH (no controllers executed)" : "MISMATCH"}`);
+  if (h !== r.finalHash) process.exit(1);
+}

@@ -53,3 +53,4 @@ export function runHeadless(opts: HeadlessOptions): HeadlessResult {
 }
 
 export * from "./soak.ts";
+export * from "./controllers.ts";

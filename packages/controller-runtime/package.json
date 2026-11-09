@@ -9,7 +9,9 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@autosoccer/controller-sdk": "workspace:*",
     "@autosoccer/sim-core": "workspace:*",
-    "@autosoccer/controller-sdk": "workspace:*"
+    "@jitl/quickjs-singlefile-mjs-release-sync": "0.31.0",
+    "quickjs-emscripten-core": "0.31.0"
   }
 }
