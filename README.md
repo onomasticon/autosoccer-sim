@@ -6,7 +6,7 @@ Headless TypeScript engine, Bun workspace, React + PixiJS viewer.
 > **Status: M5**: Blue possession vs Red counterattack, two complete, tactically distinct sandboxed controllers (on top of M1–M4).
 > Roadmap: see the milestone issues (M1–M7).
 
-![viewer](docs/media/m5/02-blue-passing.png)
+![viewer](docs/media/m5/03-blue-passing.png)
 
 ## Quickstart
 
