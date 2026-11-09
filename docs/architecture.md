@@ -1,4 +1,4 @@
-# Architecture (M6)
+# Architecture (M7 release)
 
 ```
             ┌────────────────────┐        ┌──────────────────────┐
@@ -63,3 +63,21 @@
 turns a run plus its sandboxed controllers into a replay. The viewer records every live run and
 plays replays through the same `PitchView`, controller inspector, action log and timeline;
 replay mode never executes controllers. See [replays.md](replays.md).
+
+## Reliability and performance (M7)
+
+- **Invariants:** `sim-core/src/invariants.ts` (`checkInvariants`) verifies after each tick that:
+  - all values are finite;
+  - players and ball stay inside the world;
+  - speed limits hold;
+  - there are no stacked players;
+  - a held ball is held by a keeper;
+  - the clock is valid;
+  - restart phases have a valid taker and are never overdue.
+
+  Regression tests, soak runs and every tournament match check them on every tick.
+- **Tournaments:** `match-runner/src/batch.ts` runs one seeded match with invariant checks, an
+  optional determinism re-run and verified replay recording. `bun run tournament` spreads seeds
+  over worker processes (`batch-worker.ts`) and writes `summary.md`, `summary.json`,
+  `results.jsonl` and `replays/`.
+- **Benchmark:** `bun run bench --write` regenerates [performance.md](performance.md).

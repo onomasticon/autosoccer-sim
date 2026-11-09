@@ -5,6 +5,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { gzipSync } from "node:zlib";
 import { hashState, Simulation } from "@autosoccer/sim-core";
 import { runtimeId } from "@autosoccer/telemetry";
 import { runControllerMatch } from "./controllers.ts";
@@ -36,6 +37,6 @@ if (process.argv.includes("--verify")) {
 if (recordPath && r.replay) {
   mkdirSync(dirname(recordPath), { recursive: true });
   const text = JSON.stringify(r.replay);
-  writeFileSync(recordPath, text);
+  writeFileSync(recordPath, recordPath.endsWith(".gz") ? gzipSync(text) : text);
   console.log(`replay    ${recordPath} (${(text.length / 1024).toFixed(0)} KB · ${r.replay.snapshots.length} snapshots · ${r.replay.hashes.length} hashes · ${r.replay.events.length} events · ${r.replay.decisions.length} decisions)`);
 }

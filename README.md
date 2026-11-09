@@ -1,71 +1,89 @@
 # autosoccer-sim
 
-Deterministic 5v5 2D soccer simulation with scriptable team controllers.
-Headless TypeScript engine, Bun workspace, React + PixiJS viewer.
+A deterministic 5v5 2D soccer simulator for scriptable team controllers: a headless TypeScript
+engine, sandboxed JavaScript controllers, and a React + PixiJS viewer with replays. It's built so
+that new controllers, including LLM-generated ones, can be written from the public docs alone.
 
-> **Status: M6**: match viewer, replay recording and controller decision timeline (on top of M1–M5).
-> Roadmap: see the milestone issues (M1–M7).
+> **Release (M7)**: tournament CLI, 1,000-seed reliability run, performance profile and a
+> one-command demo. Release numbers are in [docs/release-report.md](docs/release-report.md) and
+> [docs/performance.md](docs/performance.md).
 
-![viewer](docs/media/m6/06-replay-goal.png)
+![Blue vs Red](docs/media/m7/02-match.png)
 
-## Quickstart
-
-Requires **Bun 1.2.19** (pinned in `.bun-version` / `packageManager`). Node ≥ 20 is used by Vitest and Playwright.
+## Try it
 
 ```sh
 bun install
-bun run demo                      # one command: viewer opens and plays Blue vs Red at 4×
-bun run dev                       # viewer at http://127.0.0.1:5173/?seed=42
-bun run headless --seed 42 --verify --out out/run-42.jsonl
-bun run test                      # Vitest (Node/V8) + golden hashes under Bun/JSC
-bun run soak --matches 1000       # 1,000 seeded full matches: must all reach full time
-bun run match --blue examples/controllers/blue-possession.js --red examples/controllers/red-counter.js --verify
-bun run bvr --matches 100         # 100 seeded Blue vs Red matches + action profiles
-bun run coverage:api              # regenerates docs/api-coverage.md
-bun run match --seed 42 --record out/m.replay.json   # record a replay headlessly
-bun run replay out/m.replay.json --timeline --at goal:1 --verify
-bun run tournament --matches 2    # round-robin between example controllers
-bun run typecheck
+bun run demo            # viewer opens and plays Blue (possession) vs Red (counterattack)
+bun run demo:replay     # viewer opens the bundled sample replay
 ```
 
-Viewer controls: **Space** play/pause · **.** single step · click a player to inspect (shows its
-kick/tackle/catch ranges) · **Run scenario** plays a scripted demo of one action (pass, dribble,
-interception, tackle, shot/goal, keeper catch & release, rejected kicks, rejected catches) ·
-**Manual** mode: **WASD/arrows** move the selected player, **Shift** sprint, **E** toggle dribble,
-**J** kick (Shift = hard), **K** tackle, **L** catch/release · **Verify determinism** replays the
-recorded command stream and compares state hashes. The event log shows executed actions and
-rejected commands with reasons.
+Requires **Bun 1.2.19** (pinned) and Node ≥ 20. Full command list:
+[docs/quickstart.md](docs/quickstart.md).
 
-## Writing a controller
+```sh
+bun run dev                                    # viewer
+bun run match --blue examples/controllers/blue-possession.js --red examples/controllers/red-counter.js --seed 42 --verify
+bun run tournament --matches 1000 --workers 6  # seeded series, parallel; summary + replays in out/tournament
+bun run replay examples/replays/blue-vs-red-sample.replay.json.gz --timeline --verify
+bun run bench                                  # throughput (target ≥10× real time)
+bun run test                                   # unit, regression, sandbox, replay, docs and golden-hash tests
+```
+
+## Write a controller
 
 ```js
 defineController({
   name: "my-team",
+  initialize(info) { this.rules = info.rules; },
   update(obs) {
-    return obs.teammates.map((p) => ({ type: "moveTo", player: p.id, x: obs.ball.x, y: obs.ball.y }));
+    const p = Soccer.nearest(obs.teammates.filter((q) => q.role !== "GK"), obs.ball);
+    return Soccer.approachAndKick(p, obs.ball, Soccer.oppGoal(obs), 0.8, this.rules);
   },
 });
 ```
 
-See [docs/controller-sdk.md](docs/controller-sdk.md), [docs/tactics.md](docs/tactics.md), [docs/replays.md](docs/replays.md) and `examples/controllers/`.
+- [Tutorial: writing a controller](docs/writing-a-controller.md). Its final code is run by the tests.
+- [Controller SDK reference](docs/controller-sdk.md): observations, actions, lifecycle, sandbox
+  limits, helpers.
+- [API coverage](docs/api-coverage.md): every action, callback, field and event mapped to examples
+  and tests.
+- Examples: `examples/controllers/`, including the featured
+  [Blue and Red](docs/tactics.md), baselines and adversarial scripts.
+
+## How it works
+
+| Doc | Contents |
+| --- | --- |
+| [architecture.md](docs/architecture.md) | Packages, contracts, determinism rules, sandbox, replays |
+| [simulation.md](docs/simulation.md) | Rules spec: units, physics, actions, match flow, restarts, fouls, clock |
+| [replays.md](docs/replays.md) | Replay format, seeking, verification, viewer timeline |
+| [performance.md](docs/performance.md) | Reference machine, throughput, bottlenecks |
+| [troubleshooting.md](docs/troubleshooting.md) | Common problems and fixes |
+
+Key properties:
+- **Deterministic.** The same seed, config and accepted commands give identical state hashes on
+  Bun, Node and Chrome. The engine uses its own correctly rounded maths, and controllers run in
+  WASM with a seeded RNG.
+- **Isolated.** Each controller runs in its own QuickJS/WASM sandbox with no host access, a
+  16 MB heap and a deterministic CPU budget. A failing controller falls back to a built-in safe
+  controller, and every restart has an engine fallback, so no controller can stall a match.
+- **Replays** reproduce any match without running controllers, and verify every state hash.
 
 ## Layout
 
 | Package | Purpose |
 | --- | --- |
-| `packages/sim-core` | Pure deterministic engine: config, seeded PRNG, deterministic math, world state, `step`, state hash, `Simulation` driver. No DOM/timers/`Math.random`. |
-| `packages/controller-sdk` | **Public, versioned controller API** (SDK 1.0): observation/action schemas, validation and translation. See [docs/controller-sdk.md](docs/controller-sdk.md). |
-| `packages/controller-runtime` | Runs controllers at 10 Hz: the **QuickJS/WASM sandbox** for untrusted scripts, baseline (safe/idle/chaos) controllers, scenarios, playground, keyboard. |
-| `packages/match-runner` | Headless runner + CLI (`bun run headless`). |
-| `packages/telemetry` | Run metadata, hash checkpoints, command stream → JSONL. |
-| `apps/viewer` | React + PixiJS viewer; uses the same `Simulation` class as the headless runner. |
-| `tests/` | Vitest suites + cross-runtime golden hashes (`tests/golden.json`). |
+| `packages/sim-core` | Engine: physics, actions, match rules, hashing, invariants |
+| `packages/controller-sdk` | Public API (SDK 1.2): observation and action schemas, validation, `Soccer` helpers |
+| `packages/controller-runtime` | Sandbox, baseline controllers, scenarios |
+| `packages/match-runner` | CLIs (match, replay, tournament, bench, soak), stats, replay building |
+| `packages/telemetry` | Replay format, recorder, player and verification |
+| `apps/viewer` | React + PixiJS viewer: live, scenarios, manual control, replays |
+| `tests/` | Vitest suites + cross-runtime golden hashes |
 
-See [docs/architecture.md](docs/architecture.md) and [docs/simulation.md](docs/simulation.md).
+## Walkthroughs
 
-## Walkthrough recording
-
-`bun run dev` in one terminal, then `bun run walkthrough` records `docs/media/m6/walkthrough.mp4`,
-a GIF preview and screenshots by driving the real viewer with Playwright (`walkthrough:m1` to
-`walkthrough:m5` re-record earlier milestones). The script fails if an expected scenario event/rejection is missing or if
-browser and headless hashes differ.
+Each milestone has a captioned video recorded from the real app, in `docs/media/m1` to
+`docs/media/m7`. `bun run walkthrough` re-records the release walkthrough (with `bun run dev`
+running).

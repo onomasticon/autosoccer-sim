@@ -32,7 +32,8 @@ Blue defends −x at kickoff. All values live in `DEFAULT_CONFIG` (`packages/sim
   the 0.51 m player–ball contact distance.
 - **Boundaries (M3):** touchlines and goal lines aren't walls; the ball can leave play. The posts
   (at ±2 m), the goal nets (entered only through the mouth) and the boards around the 2 m run-off
-  are physical obstacles.
+  are physical obstacles. If a player pins the ball against the boards, the boards win: the ball
+  stays inside the world.
 - **Goal:** inside the 4 m mouth the ball may cross the goal line into a 1.2 m-deep net
   (restitution 0.15, heavy damping). A goal is the *whole* ball beyond the line (`|x| > 25 + r`)
   with `|y| < 2`. It produces one `goal` event, and `ball.inGoal` stays set until the ball is

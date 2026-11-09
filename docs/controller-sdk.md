@@ -1,6 +1,10 @@
-# Controller SDK reference (v1.1)
+# Controller SDK reference (v1.2)
 
-`SDK_VERSION 1.1.0` · observation schema `1.0` · action schema `1.0` · engine `0.3.0`
+`SDK_VERSION 1.2.0` · observation schema `1.0` · action schema `1.0` · engine `0.3.0`
+
+**1.2** rounds every non-integer observation number to 4 decimals (0.1 mm, 0.1 mm/s, 1e-4 rad). The
+shape is unchanged. Rounding makes parsing inside the sandbox about twice as fast, and it's
+deterministic on every host.
 
 **1.1** adds two things and changes nothing else: the built-in `Soccer` helper library, and an
 optional `debug` decision trace returned from `update`.

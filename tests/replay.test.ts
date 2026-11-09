@@ -9,7 +9,12 @@ const ex = (p: string) => readFileSync(new URL(`../examples/controllers/${p}`, i
 let cached: ReplayFile | null = null;
 async function recorded(): Promise<ReplayFile> {
   if (cached) return cached;
-  const r = await runControllerMatch({ seed: 42, blue: { source: ex("blue-possession.js"), label: "blue-possession.js" }, red: { source: ex("red-counter.js"), label: "red-counter.js" }, record: true });
+  // First seed (deterministically) whose match has a goal, so goal seeking can be tested.
+  let r!: Awaited<ReturnType<typeof runControllerMatch>>;
+  for (const seed of [42, 7, 3, 1, 2, 5, 8, 11]) {
+    r = await runControllerMatch({ seed, blue: { source: ex("blue-possession.js"), label: "blue-possession.js" }, red: { source: ex("red-counter.js"), label: "red-counter.js" }, record: true });
+    if (r.state.match.score.blue + r.state.match.score.red > 0) break;
+  }
   cached = JSON.parse(JSON.stringify(r.replay)) as ReplayFile; // through JSON, like a file
   expect(cached.finalHash).toBe(r.finalHash);
   return cached;
@@ -18,7 +23,7 @@ async function recorded(): Promise<ReplayFile> {
 describe("replay recording + playback", () => {
   it("records versions, seed, config, controller identities, commands, events, decisions, snapshots and hashes", async () => {
     const r = await recorded();
-    expect(r).toMatchObject({ format: "autosoccer-replay", formatVersion: 1, engineVersion: "0.3.0", sdkVersion: "1.1.0", seed: 42, result: { period: "fullTime" } });
+    expect(r).toMatchObject({ format: "autosoccer-replay", formatVersion: 1, engineVersion: "0.3.0", sdkVersion: "1.2.0", result: { period: "fullTime" } });
     expect(r.controllers.blue).toMatchObject({ name: "blue-possession", version: "1.0.0", label: "blue-possession.js" });
     expect(r.controllers.red!.sourceHash).toMatch(/^[0-9a-f]{8}$/);
     expect(r.snapshots[0]!.tick).toBe(0);

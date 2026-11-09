@@ -268,6 +268,17 @@ export function integrateBall(
       ball.lastTouch = p.id;
       touched.add(i);
     }
+    // A player against the boards can push the ball into them: the boards win.
+    const bx = cfg.pitch.length / 2 + cfg.pitch.runOff - bc.radius;
+    const by = cfg.pitch.width / 2 + cfg.pitch.runOff - bc.radius;
+    if (Math.abs(ball.x) > bx) {
+      ball.x = (ball.x < 0 ? -1 : 1) * bx;
+      if (ball.x * ball.vx > 0) ball.vx = -ball.vx * bc.wallRestitution * 0.5;
+    }
+    if (Math.abs(ball.y) > by) {
+      ball.y = (ball.y < 0 ? -1 : 1) * by;
+      if (ball.y * ball.vy > 0) ball.vy = -ball.vy * bc.wallRestitution * 0.5;
+    }
   }
   counts.playerBall += touched.size;
 

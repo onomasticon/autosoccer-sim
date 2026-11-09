@@ -7,6 +7,16 @@ import { ControllerPanel } from "./ControllerPanel.tsx";
 import { Timeline } from "./Timeline.tsx";
 import { ViewerEngine } from "./engine.ts";
 import { PRESETS } from "./presets.ts";
+import sampleReplayUrl from "../../../examples/replays/blue-vs-red-sample.replay.json.gz?url";
+
+/** Decompress a gzipped replay in the browser. */
+async function gunzipText(buf: ArrayBuffer): Promise<string> {
+  const b = new Uint8Array(buf);
+  // Servers may already have decoded it (Content-Encoding: gzip): only gunzip real gzip data.
+  if (!(b[0] === 0x1f && b[1] === 0x8b)) return new TextDecoder().decode(b);
+  const ds = new DecompressionStream("gzip");
+  return new Response(new Blob([buf]).stream().pipeThrough(ds)).text();
+}
 import { PitchView } from "./PitchView.tsx";
 
 function fmtClock(sec: number): string {
@@ -70,7 +80,9 @@ export function App() {
       // One-command demo: ?demo=1 (or ?autoplay=1&speed=4) starts the match immediately.
       if (params.get("speed")) engine.setSpeed(Number(params.get("speed")));
       else if (params.get("demo")) engine.setSpeed(4);
-      if (params.get("autoplay") || params.get("demo")) engine.play();
+      if (params.get("replay") === "sample") {
+        void fetch(sampleReplayUrl).then((r) => r.arrayBuffer()).then(gunzipText).then((t) => { engine.openReplay(t); if (params.get("autoplay")) engine.play(); });
+      } else if (params.get("autoplay") || params.get("demo")) engine.play();
       (window as unknown as { __ready: boolean }).__ready = true;
     });
   }, [engine]);
@@ -130,7 +142,7 @@ export function App() {
     <div className="app">
       <header>
         <h1>autosoccer-sim</h1>
-        <span className="muted">engine v{ENGINE_VERSION} · M6 viewer + replay</span>
+        <span className="muted">engine v{ENGINE_VERSION} · release (M7)</span>
         <div className="scoreboard" data-testid="scoreboard">
           <span className="team blue">BLUE {s.match.defends.blue === "left" ? "→" : "←"}</span>
           <span className="score" data-testid="score">{s.match.score.blue} – {s.match.score.red}</span>
@@ -216,10 +228,11 @@ export function App() {
               <label className="filebtn">📂 Load replay
                 <input data-testid="load-replay" type="file" accept=".json" style={{ display: "none" }} onChange={async (e) => {
                   const f = e.target.files?.[0];
-                  if (f) engine.openReplay(await f.text());
+                  if (f) engine.openReplay(f.name.endsWith(".gz") ? await gunzipText(await f.arrayBuffer()) : await f.text());
                   e.target.value = "";
                 }} />
               </label>
+              <button data-testid="sample-replay" onClick={async () => engine.openReplay(await gunzipText(await (await fetch(sampleReplayUrl)).arrayBuffer()))}>▶ Sample replay</button>
               {engine.player ? (
                 <>
                   <button data-testid="verify-replay" onClick={() => engine.verifyReplay()}>Verify replay hashes</button>
