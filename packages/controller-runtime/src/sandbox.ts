@@ -23,7 +23,7 @@ import { newQuickJSWASMModuleFromVariant } from "quickjs-emscripten-core";
 import variant from "@jitl/quickjs-singlefile-mjs-release-sync";
 import type { CommandSource, DecisionContext } from "@autosoccer/controller-sdk";
 import type { ControllerDebug } from "@autosoccer/controller-sdk";
-import { buildMatchInfo, buildMatchResult, buildObservation, HELPERS_SOURCE, MAX_DEBUG_BYTES, sanitizeDebug, translateActions } from "@autosoccer/controller-sdk";
+import { buildMatchInfo, buildMatchResult, buildObservation, HELPERS_SOURCE, MAX_DEBUG_BYTES, sanitizeDebug, serializeObservation, translateActions } from "@autosoccer/controller-sdk";
 import type { EngineCommand, SimConfig, TeamId, WorldState } from "@autosoccer/sim-core";
 import { DEFAULT_CONFIG } from "@autosoccer/sim-core";
 import { createSafeController } from "./restarts.ts";
@@ -105,8 +105,10 @@ const BOOTSTRAP = `
   delete globalThis.Date;
   const logs = [];
   const fmt = (args) => args.map((x) => { try { return typeof x === "string" ? x : JSON.stringify(x); } catch (e) { return String(x); } }).join(" ");
-  globalThis.console = { log: (...a) => logs.push(fmt(a)), warn: (...a) => logs.push("warn: " + fmt(a)), error: (...a) => logs.push("error: " + fmt(a)), info: (...a) => logs.push(fmt(a)) };
-  globalThis.__drainLogs = () => { const out = JSON.stringify(logs.slice(0, 50)); logs.length = 0; return out; };
+  const push = (s) => { logs.push(s); globalThis.__pendingLogs = logs.length; };
+  globalThis.__pendingLogs = 0;
+  globalThis.console = { log: (...a) => push(fmt(a)), warn: (...a) => push("warn: " + fmt(a)), error: (...a) => push("error: " + fmt(a)), info: (...a) => push(fmt(a)) };
+  globalThis.__drainLogs = () => { const out = JSON.stringify(logs.slice(0, 50)); logs.length = 0; globalThis.__pendingLogs = 0; return out; };
   let def = null;
   globalThis.defineController = function (d) {
     if (def) throw new Error("defineController called twice");
@@ -259,6 +261,11 @@ export class SandboxedController implements CommandSource {
   }
 
   private drainLogs(tick: number): void {
+    // Cheap property read first: most updates don't log, so skip the extra call.
+    const h = this.ctx.getProp(this.ctx.global, "__pendingLogs");
+    const n = this.ctx.typeof(h) === "number" ? this.ctx.getNumber(h) : 1;
+    h.dispose();
+    if (n === 0) return;
     const r = this.callRaw("__drainLogs", [], 20);
     if (!r.ok) return;
     for (const line of JSON.parse(r.value) as string[]) {
@@ -311,7 +318,7 @@ export class SandboxedController implements CommandSource {
 
     for (const rj of dc.rejected ?? []) this.diag(rj.tick, "engine-rejected", rj.reason, rj.command);
     const obs = buildObservation(state, this.team, dc.events ?? [], dc.rejected ?? [], this.cfg);
-    const r = this.callRaw("__call", ["update", JSON.stringify(obs)], this.limits.opsUpdate);
+    const r = this.callRaw("__call", ["update", serializeObservation(obs)], this.limits.opsUpdate);
     this.updates++;
     const opsUsed = this.ops;
     this.drainLogs(tick);

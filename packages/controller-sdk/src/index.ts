@@ -4,6 +4,7 @@
  *
  *   SDK_VERSION 1.1.0 · observation schema "1.0" · action schema "1.0"
  *   1.1: `Soccer` helper library in the sandbox; optional `debug` output from update.
+ *   1.2: observation numbers rounded to 4 decimals (performance; shape unchanged).
  *
  * Controllers see only plain JSON observations (built here from the world
  * state; no engine references) and return plain JSON actions, which are
@@ -13,7 +14,19 @@
 import type { EngineCommand, LoggedEvent, Period, Phase, PlayerId, RestartType, Role, SimConfig, SimEvent, TeamId, WorldState } from "@autosoccer/sim-core";
 import { attackSign, DEFAULT_CONFIG, ENGINE_VERSION } from "@autosoccer/sim-core";
 
-export const SDK_VERSION = "1.1.0";
+export const SDK_VERSION = "1.2.0";
+/** Observation numbers are rounded to this many decimals (0.1 mm, 0.1 mm/s, 1e-4 rad). SDK ≥ 1.2. */
+export const OBSERVATION_DECIMALS = 4;
+
+/** Deterministic rounding used for every non-integer observation number. */
+export function roundObs(v: number): number {
+  return Number.isInteger(v) ? v : Math.round(v * 1e4) / 1e4;
+}
+
+/** JSON for an observation, with numbers rounded (much cheaper for the sandbox to parse). */
+export function serializeObservation(o: Observation): string {
+  return JSON.stringify(o, (_k, v) => (typeof v === "number" ? roundObs(v) : v));
+}
 export { HELPERS_SOURCE } from "./helpers-source.ts";
 export const OBSERVATION_SCHEMA_VERSION = "1.0";
 export const ACTION_SCHEMA_VERSION = "1.0";

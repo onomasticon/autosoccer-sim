@@ -14,6 +14,7 @@ export * from "./world.ts";
 export * from "./physics.ts";
 export * from "./actions.ts";
 export * from "./match.ts";
+export * from "./invariants.ts";
 export * from "./step.ts";
 export * from "./hash.ts";
 export * from "./simulation.ts";
