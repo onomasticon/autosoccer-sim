@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG, ticksPerDecision } from "./config.ts";
 import type { CommandRejection, EngineCommand } from "./commands.ts";
 import { hashState } from "./hash.ts";
 import { step } from "./step.ts";
-import type { SimEvent, WorldState } from "./types.ts";
+import type { Period, Phase, SimEvent, WorldState } from "./types.ts";
 import { createWorld } from "./world.ts";
 
 /** Commands accepted at a specific decision tick. This is the input stream. */
@@ -21,23 +21,23 @@ export interface LoggedEvent {
 }
 
 export interface MatchClock {
-  /** 1-based half; equals `halves + 1` once the match time has elapsed. */
-  readonly half: number;
+  /** 1 during pre-match and the first half, 2 from halftime on. */
+  readonly half: 1 | 2;
+  /** Match-clock seconds elapsed in the current half. */
   readonly secondsInHalf: number;
+  /** Simulated seconds since world creation (wall-clock of the sim, incl. pauses). */
   readonly totalSeconds: number;
+  readonly period: Period;
+  readonly phase: Phase;
   readonly finished: boolean;
 }
 
-export function clockOf(tick: number, cfg: SimConfig = DEFAULT_CONFIG): MatchClock {
-  const totalSeconds = tick / cfg.tickRate;
-  const halfIdx = Math.floor(totalSeconds / cfg.halfDurationSec);
-  const finished = halfIdx >= cfg.halves;
-  return {
-    half: Math.min(halfIdx, cfg.halves) + 1,
-    secondsInHalf: finished ? cfg.halfDurationSec : totalSeconds - halfIdx * cfg.halfDurationSec,
-    totalSeconds,
-    finished,
-  };
+export function clockOf(state: Pick<WorldState, "tick" | "match">, cfg: SimConfig = DEFAULT_CONFIG): MatchClock {
+  const m = state.match;
+  const half = m.period === "preMatch" || m.period === "firstHalf" ? 1 : 2;
+  const full = cfg.halfDurationSec;
+  const secondsInHalf = m.period === "halftime" || m.period === "fullTime" ? full : Math.min(full, m.halfTicks / cfg.tickRate);
+  return { half, secondsInHalf, totalSeconds: state.tick / cfg.tickRate, period: m.period, phase: m.phase, finished: m.period === "fullTime" };
 }
 
 export function isDecisionTick(tick: number, cfg: SimConfig = DEFAULT_CONFIG): boolean {
@@ -76,7 +76,7 @@ export class Simulation {
     return this._events;
   }
   get clock(): MatchClock {
-    return clockOf(this.state.tick, this.config);
+    return clockOf(this.state, this.config);
   }
   hash(): string {
     return hashState(this.state);

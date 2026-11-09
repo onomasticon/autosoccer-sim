@@ -5,6 +5,8 @@ import {
   createScenarioSource,
   getScenario,
   keyboardCommands,
+  loadSandbox,
+  SandboxedController,
   type KeyActions,
   type KeyState,
   type ScenarioSource,
@@ -12,7 +14,12 @@ import {
 import type { PlayerId } from "@autosoccer/sim-core";
 import { DEFAULT_CONFIG, hashState, isDecisionTick, Simulation } from "@autosoccer/sim-core";
 
-export type InputMode = "script" | "manual" | "scenario";
+export type InputMode = "script" | "manual" | "scenario" | "controllers";
+
+export interface ScriptSlot {
+  source: string;
+  label: string;
+}
 
 export interface VerifyResult {
   tick: number;
@@ -39,6 +46,10 @@ export class ViewerEngine {
   /** One-shot action keys, latched until the next decision tick. */
   pending: KeyActions = { kick: false, tackle: false, hands: false };
   lastVerify: VerifyResult | null = null;
+  /** Controller scripts per team (used in "controllers" mode). */
+  scripts: { blue: ScriptSlot; red: ScriptSlot } = { blue: { source: "", label: "" }, red: { source: "", label: "" } };
+  controllers: { blue: SandboxedController | null; red: SandboxedController | null } = { blue: null, red: null };
+  private qjs: Awaited<ReturnType<typeof loadSandbox>> | null = null;
   private listeners = new Set<() => void>();
   private raf = 0;
   private lastTime = 0;
@@ -49,7 +60,33 @@ export class ViewerEngine {
     this.buildRunner();
   }
 
+  /** Load the QuickJS sandbox (async, once). */
+  async init(): Promise<void> {
+    this.qjs = await loadSandbox();
+  }
+
+  setScript(team: "blue" | "red", slot: ScriptSlot, restart = true): void {
+    this.scripts[team] = slot;
+    if (restart && this.mode === "controllers") this.reset();
+  }
+
+  private disposeControllers(): void {
+    this.controllers.blue?.dispose();
+    this.controllers.red?.dispose();
+    this.controllers = { blue: null, red: null };
+  }
+
   private buildRunner(): void {
+    this.disposeControllers();
+    if (this.mode === "controllers" && this.qjs) {
+      for (const team of ["blue", "red"] as const) {
+        const c = new SandboxedController(this.qjs, { team, source: this.scripts[team].source, label: this.scripts[team].label, config: this.sim.config });
+        c.seedRandom(this.sim.seed);
+        this.controllers[team] = c;
+      }
+      this.runner = new CommandRunner(this.sim, [this.controllers.blue!, this.controllers.red!]);
+      return;
+    }
     if (this.mode === "scenario" && this.scenario) {
       this.runner = new CommandRunner(this.sim, [this.scenario]);
       return;
@@ -81,12 +118,12 @@ export class ViewerEngine {
       this.pending = { kick: false, tackle: false, hands: false };
     }
     this.runner.tick();
-    if (this.sim.clock.finished) this.pause();
+    if (this.sim.clock.finished && this.mode !== "scenario") this.pause();
     if (this.mode === "scenario" && this.scenario?.done(this.sim.state.tick)) this.pause();
   }
 
   play(): void {
-    if (this.playing || this.sim.clock.finished) return;
+    if (this.playing || (this.sim.clock.finished && this.mode !== "scenario")) return;
     this.playing = true;
     this.lastTime = performance.now();
     this.acc = 0;

@@ -1,4 +1,4 @@
-# Simulation rules (M2)
+# Simulation rules (M3)
 
 Units: metres, seconds, m/s, radians. Origin at the pitch centre, +x toward the right goal, +y down.
 Blue defends −x at kickoff. All values live in `DEFAULT_CONFIG` (`packages/sim-core/src/config.ts`).
@@ -30,8 +30,9 @@ Blue defends −x at kickoff. All values live in `DEFAULT_CONFIG` (`packages/sim
 - Friction: speed −= (0.9 + 0.25·speed)·dt; below 0.05 m/s it stops.
 - Integrated with adaptive sub-steps (≤ 0.1 m travel each), so a 26 m/s shot can't tunnel through
   the 0.51 m player–ball contact distance.
-- **Boundaries (M2):** touchlines and the goal line outside the goal mouth are walls (restitution
-  0.6). Out-of-play and restarts come in M3.
+- **Boundaries (M3):** touchlines and goal lines aren't walls; the ball can leave play. The posts
+  (at ±2 m), the goal nets (entered only through the mouth) and the boards around the 2 m run-off
+  are physical obstacles.
 - **Goal:** inside the 4 m mouth the ball may cross the goal line into a 1.2 m-deep net
   (restitution 0.15, heavy damping). A goal is the *whole* ball beyond the line (`|x| > 25 + r`)
   with `|y| < 2`. It produces one `goal` event, and `ball.inGoal` stays set until the ball is
@@ -72,3 +73,48 @@ Automatic touches (traps, then dribble touches) run after player movement, neare
 **Debug commands** `debugPlaceBall` / `debugPlacePlayer` exist for the scenario harness and tests
 only. They are recorded in the command stream, so scenarios replay exactly. Sandboxed controllers
 won't be able to issue them (M4).
+
+## Match flow (M3)
+
+`WorldState.match` holds the **period** (`preMatch → firstHalf → halftime → secondHalf → fullTime`).
+It's tracked separately from the **phase** (`stopped`, `kickoff`, `openPlay`, `goalScored`, `kickIn`,
+`corner`, `goalKick`, `freeKick`). The match state also holds the half clock, score, which goal
+each team defends, the first-half kickoff team (a seeded coin toss) and the pending `restart`
+(type, team, spot, designated taker, ready tick and deadline tick). All of it is hashed and
+observable.
+
+| Situation | Detection | Restart | Taker | Spot |
+| --- | --- | --- | --- | --- |
+| Start of a half | timers | kickoff (first half: coin-toss winner; second half: the other team) | kicking team's FW, placed at the ball | centre |
+| Goal | whole ball over the goal line between the posts in open play | 2 s celebration, then kickoff by the conceding team; scorer = last touch, own goals flagged | as above | centre |
+| Touchline | whole ball over (`|y| > 16 + r`) | kick-in to the team that didn't touch it last | nearest outfield player | crossing point on the line |
+| Goal line, attacker last | `|x| > 25 + r`, outside the posts | goal kick | defending goalkeeper | 2.5 m in front of goal |
+| Goal line, defender last | same | corner | nearest attacker | nearest corner |
+| Foul | a failed tackle whose victim is within 1 m of the tackler | free kick to the fouled team (no penalties: a foul in the fouling team's area moves to the area's edge) | nearest outfield player | ball position |
+
+**Restart lifecycle.**
+1. The restart is awarded and a `restartAwarded` event is emitted.
+2. The ball keeps rolling for 45 ticks (out of play) or 30 ticks (foul).
+3. The ball is placed and **locked** on the spot. Players can't push it.
+4. Only the designated taker may play it, and only with a kick. Other ball actions are rejected
+   with a reason ("ball is dead…", "only the designated taker…", "…not ready yet").
+5. Opponents inside 4 m (the centre circle at kickoffs) are walked out at sprint speed, never
+   teleported. At kickoffs everyone except the taker is walked back into their own half.
+6. The taker's kick returns play to `openPlay` (`restartTaken`).
+7. If the taker hasn't kicked 360 ticks (6 s) after the ball is placed, the engine takes the
+   restart itself: a pass to the nearest teammate (`restartTaken`, `fallback: true`). No controller
+   behaviour can stall a match.
+
+**Kickoffs** are engine-placed: everyone goes to the kickoff formation for the current ends, with
+zero velocity. This is the only time the engine sets player positions directly.
+
+**Clock.** Each half is 120 s. The default policy `running` advances the clock in every phase of a
+half; `stopOnDeadBall` advances it only in open play. A half ends exactly on time, cancelling any
+pending restart. Halftime lasts 3 s, then the teams swap ends (`sidesSwitched`). Keeper areas and
+attacking directions follow `match.defends`.
+
+**Permissions.** No ball actions are accepted outside the halves, during goal celebrations, or
+after full time ("play is stopped (…)"). Movement commands are always accepted.
+
+**Events:** `periodStart`, `periodEnd`, `goalScored`, `ballOut`, `foul`, `restartAwarded`,
+`restartTaken` and `sidesSwitched`, in addition to the M2 action events.

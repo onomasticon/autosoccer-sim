@@ -1,5 +1,7 @@
 {
-  "seed=42,seconds=10": "1efe12faceb4acac",
-  "seed=7,seconds=10": "c192d3717861a829",
-  "seed=1,seconds=240": "b3935b5ed4787aac"
+  "seed=42,seconds=10": "ac705ecd71f08ae5",
+  "seed=7,seconds=10": "d60727739c1b8b33",
+  "seed=1,seconds=240": "8c82f54291ca7212",
+  "controllers:chaser-vs-zonal,seed=42,half=30s": "555d97b51431a2b7",
+  "controllers:chaser-vs-zonal,seed=42,ticks=600": "20b3dc268a8b9674"
 }
