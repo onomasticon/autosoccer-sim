@@ -49,5 +49,25 @@ export function hashState(s: WorldState): string {
   num(s.ball.holdTicks);
   str(s.ball.lastTouch ?? "-");
   str(s.ball.inGoal ?? "-");
+  const m = s.match;
+  str(m.period);
+  str(m.phase);
+  num(m.halfTicks);
+  num(m.resumeTick);
+  num(m.score.blue);
+  num(m.score.red);
+  str(m.firstKickoff);
+  str(m.defends.blue);
+  if (m.restart) {
+    const r = m.restart;
+    str(r.type);
+    str(r.team);
+    num(r.x);
+    num(r.y);
+    str(r.taker);
+    num(r.awardedTick);
+    num(r.readyTick);
+    num(r.deadlineTick);
+  } else str("no-restart");
   return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
 }

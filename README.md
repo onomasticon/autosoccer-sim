@@ -3,10 +3,10 @@
 Deterministic 5v5 2D soccer simulation with scriptable team controllers.
 Headless TypeScript engine, Bun workspace, React + PixiJS viewer.
 
-> **Status: M2** — physical soccer actions + interactive debug inspector (on top of the M1 deterministic foundation).
+> **Status: M3**: full match state machine, rules and restart lifecycle (on top of M1 determinism and M2 ball actions).
 > Roadmap: see the milestone issues (M1–M7).
 
-![viewer](docs/media/m2/01-playground.png)
+![viewer](docs/media/m3/12-second-half-kickoff.png)
 
 ## Quickstart
 
@@ -17,6 +17,7 @@ bun install
 bun run dev                       # viewer at http://127.0.0.1:5173/?seed=42
 bun run headless --seed 42 --verify --out out/run-42.jsonl
 bun run test                      # Vitest (Node/V8) + golden hashes under Bun/JSC
+bun run soak --matches 1000       # 1,000 seeded full matches: must all reach full time
 bun run typecheck
 ```
 
@@ -44,7 +45,7 @@ See [docs/architecture.md](docs/architecture.md) and [docs/simulation.md](docs/s
 
 ## Walkthrough recording
 
-`bun run dev` in one terminal, then `bun run walkthrough` records `docs/media/m2/walkthrough.mp4`,
-a GIF preview and screenshots by driving the real viewer with Playwright (`bun run walkthrough:m1`
-for the M1 recording). The script fails if an expected scenario event/rejection is missing or if
+`bun run dev` in one terminal, then `bun run walkthrough` records `docs/media/m3/walkthrough.mp4`,
+a GIF preview and screenshots by driving the real viewer with Playwright (`walkthrough:m1` and
+`walkthrough:m2` re-record earlier milestones). The script fails if an expected scenario event/rejection is missing or if
 browser and headless hashes differ.

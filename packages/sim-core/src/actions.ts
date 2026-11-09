@@ -3,7 +3,7 @@ import type { SimConfig } from "./config.ts";
 import { datan2, dcos, dhypot, dsin } from "./dmath.ts";
 import type { MutBall, MutPlayer } from "./physics.ts";
 import type { Rng } from "./prng.ts";
-import type { PlayerId, SimEvent, TeamId } from "./types.ts";
+import type { MatchState, PlayerId, SimEvent, TeamId } from "./types.ts";
 import { clamp, wrapAngle } from "./vec.ts";
 import { defendedSide } from "./world.ts";
 
@@ -16,6 +16,8 @@ export interface ActionContext {
   rejected: CommandRejection[];
   /** Set once the ball has been deliberately played this tick. */
   ballPlayed: boolean;
+  /** Current match state (which goal each team defends). */
+  match: MatchState;
 }
 
 /**
@@ -35,10 +37,10 @@ function distToBall(p: MutPlayer, b: MutBall): number {
   return dhypot(b.x - p.x, b.y - p.y);
 }
 
-/** Is (x, y) inside the penalty area that `team` defends? */
-export function inOwnPenaltyArea(team: TeamId, x: number, y: number, cfg: SimConfig): boolean {
+/** Is (x, y) inside the penalty area that `team` defends (this half, if `match` is given)? */
+export function inOwnPenaltyArea(team: TeamId, x: number, y: number, cfg: SimConfig, match?: Pick<MatchState, "defends">): boolean {
   const halfL = cfg.pitch.length / 2;
-  const side = defendedSide(team) === "left" ? -1 : 1;
+  const side = defendedSide(team, match) === "left" ? -1 : 1;
   const fromLine = halfL - side * x; // distance from the defended goal line, ≥ 0 on pitch
   return fromLine >= 0 && fromLine <= cfg.pitch.penaltyAreaDepth && Math.abs(y) <= cfg.pitch.penaltyAreaWidth / 2;
 }
@@ -140,8 +142,8 @@ function executeAction(ctx: ActionContext, a: ActionCommand, p: MutPlayer): stri
       if (ctx.ballPlayed) return "ball already played this tick";
       if (ball.heldBy !== null) return "ball already held";
       if (p.catchCooldown > 0) return `catch cooldown (${p.catchCooldown} ticks)`;
-      if (!inOwnPenaltyArea(p.team, ball.x, ball.y, cfg)) return "ball is outside the goalkeeper's own penalty area";
-      if (!inOwnPenaltyArea(p.team, p.x, p.y, cfg)) return "goalkeeper is outside own penalty area";
+      if (!inOwnPenaltyArea(p.team, ball.x, ball.y, cfg, ctx.match)) return "ball is outside the goalkeeper's own penalty area";
+      if (!inOwnPenaltyArea(p.team, p.x, p.y, cfg, ctx.match)) return "goalkeeper is outside own penalty area";
       if (d > ac.catchReach) return `ball out of catch reach (${d.toFixed(2)} m > ${ac.catchReach} m)`;
       const rel = dhypot(ball.vx - p.vx, ball.vy - p.vy);
       if (rel > ac.catchMaxSpeed) return `ball too fast to catch (${rel.toFixed(1)} m/s)`;
@@ -157,7 +159,7 @@ function executeAction(ctx: ActionContext, a: ActionCommand, p: MutPlayer): stri
         events.push({ type: "catch", playerId: p.id, success: true, incomingSpeed: rel });
       } else {
         // Fumble: parry the ball away from goal at reduced speed.
-        const awayX = defendedSide(p.team) === "left" ? 1 : -1;
+        const awayX = defendedSide(p.team, ctx.match) === "left" ? 1 : -1;
         ball.vx = awayX * Math.max(3, rel * 0.35);
         ball.vy = ball.vy * 0.3;
         ball.lastTouch = p.id;
@@ -255,7 +257,7 @@ export function updateHeldBall(ctx: ActionContext): void {
   const k = players.find((p) => p.id === ball.heldBy)!;
   // Keeper may not carry the ball out of the penalty area.
   const halfL = cfg.pitch.length / 2;
-  const side = defendedSide(k.team) === "left" ? -1 : 1;
+  const side = defendedSide(k.team, ctx.match) === "left" ? -1 : 1;
   const r = cfg.player.radius;
   const lineX = side * halfL;
   const innerX = side * (halfL - cfg.pitch.penaltyAreaDepth);

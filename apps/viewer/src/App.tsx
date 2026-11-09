@@ -21,8 +21,28 @@ function describeEvent(le: LoggedEvent): string {
     case "tackle": return `${e.playerId} tackle ${e.success ? "WON" : "missed → grounded"}${e.victim ? ` vs ${e.victim}` : ""}`;
     case "catch": return `${e.playerId} ${e.success ? "CATCHES" : "fumbles"} (${e.incomingSpeed.toFixed(1)} m/s)`;
     case "release": return `${e.playerId} ${e.auto ? "drops (6 s limit)" : "releases"}`;
-    case "goal": return `GOAL — ball crossed the ${e.side} goal line`;
+    case "goal": return `ball crossed the ${e.side} goal line`;
+    case "goalScored": return `GOAL ${e.team.toUpperCase()}${e.scorer ? ` — ${e.scorer}` : ""}${e.ownGoal ? " (own goal)" : ""} · ${e.score.blue}–${e.score.red}`;
+    case "periodStart": return `▶ ${e.period}`;
+    case "periodEnd": return `⏹ end of ${e.period}`;
+    case "ballOut": return `ball out over the ${e.line === "goalLine" ? "goal line" : "touchline"}${e.lastTouch ? ` (last touch ${e.lastTouch})` : ""}`;
+    case "foul": return `FOUL by ${e.by} on ${e.against}`;
+    case "restartAwarded": return `${e.restart} → ${e.team}, taker ${e.taker}`;
+    case "restartTaken": return `${e.restart} taken by ${e.taker}${e.fallback ? " (engine fallback: timeout)" : ""}`;
+    case "sidesSwitched": return `sides switched: blue defends ${e.defends.blue}`;
   }
+}
+
+const PERIOD_LABEL: Record<string, string> = { preMatch: "Pre-match", firstHalf: "1st half", halftime: "Half-time", secondHalf: "2nd half", fullTime: "Full time" };
+const PHASE_LABEL: Record<string, string> = { stopped: "—", kickoff: "Kick-off", openPlay: "Open play", goalScored: "Goal!", kickIn: "Kick-in", corner: "Corner", goalKick: "Goal kick", freeKick: "Free kick" };
+
+function banner(s: import("@autosoccer/sim-core").WorldState): string | null {
+  const m = s.match;
+  if (m.period === "halftime") return "HALF-TIME";
+  if (m.period === "fullTime") return `FULL TIME · ${m.score.blue}–${m.score.red}`;
+  if (m.phase === "goalScored") return `GOAL! ${m.score.blue}–${m.score.red}`;
+  if (m.restart) return `${PHASE_LABEL[m.phase]!.toUpperCase()} · ${m.restart.team.toUpperCase()} · taker ${m.restart.taker}${s.tick < m.restart.readyTick ? " (placing ball)" : ""}`;
+  return null;
 }
 
 const initialSeed = Number(new URLSearchParams(location.search).get("seed") ?? 42);
@@ -90,13 +110,23 @@ export function App() {
     <div className="app">
       <header>
         <h1>autosoccer-sim</h1>
-        <span className="muted">engine v{ENGINE_VERSION} · M2 soccer actions playground</span>
+        <span className="muted">engine v{ENGINE_VERSION} · M3 match flow</span>
+        <div className="scoreboard" data-testid="scoreboard">
+          <span className="team blue">BLUE {s.match.defends.blue === "left" ? "→" : "←"}</span>
+          <span className="score" data-testid="score">{s.match.score.blue} – {s.match.score.red}</span>
+          <span className="team red">{s.match.defends.red === "left" ? "→" : "←"} RED</span>
+          <span className="period" data-testid="period">{PERIOD_LABEL[s.match.period]}</span>
+          <span className={`phase ${s.match.phase}`} data-testid="phase">{PHASE_LABEL[s.match.phase]}</span>
+        </div>
         <div className="clock" data-testid="clock">
-          {clock.finished ? "FULL TIME" : `H${clock.half}`} {fmtClock(clock.secondsInHalf)}
+          {clock.finished ? "FT" : `H${clock.half}`} {fmtClock(clock.secondsInHalf)}
         </div>
       </header>
       <main>
+        <div className="pitch-wrap">
+          {banner(s) && <div className="banner" data-testid="banner">{banner(s)}</div>}
         <PitchView state={s} events={sim.events} config={sim.config} selected={engine.selected} overlays={engine.overlays} onSelect={(id) => engine.select(id)} />
+        </div>
         <aside>
           <section>
             <div className="row">
@@ -118,7 +148,11 @@ export function App() {
             </div>
             <div className="row">
               <select data-testid="scenario" value={scenarioId} onChange={(e) => setScenarioId(e.target.value)}>
-                {SCENARIOS.map((sc) => <option key={sc.id} value={sc.id}>{sc.title}</option>)}
+                {(["M2 actions", "M3 match flow"] as const).map((g) => (
+                  <optgroup key={g} label={g}>
+                    {SCENARIOS.filter((sc) => (sc.group ?? "M2 actions") === g).map((sc) => <option key={sc.id} value={sc.id}>{sc.title}</option>)}
+                  </optgroup>
+                ))}
               </select>
               <button data-testid="run-scenario" onClick={() => engine.runScenario(scenarioId, Number(seedInput) || 0)}>Run scenario</button>
             </div>

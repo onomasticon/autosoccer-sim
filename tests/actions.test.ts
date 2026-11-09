@@ -19,7 +19,7 @@ const IDS: PlayerId[] = ["blue-1", "blue-2", "blue-3", "blue-4", "blue-5", "red-
 
 /** World with everyone parked on the far touchline except the given placements. */
 function setup(place: Partial<Record<PlayerId, { x: number; y: number; heading?: number; stamina?: number }>>, ball: { x: number; y: number; vx?: number; vy?: number }, seed = 1): WorldState {
-  const cmds: EngineCommand[] = [{ type: "debugPlaceBall", ...ball }];
+  const cmds: EngineCommand[] = [{ type: "debugSetMatch", period: "firstHalf", phase: "openPlay" }, { type: "debugPlaceBall", ...ball }];
   IDS.forEach((id, i) => {
     const p = place[id];
     cmds.push(p ? { type: "debugPlacePlayer", playerId: id, ...p } : { type: "debugPlacePlayer", playerId: id, x: -22 + i * 4.8, y: -17.2 });
@@ -287,7 +287,7 @@ describe("scenarios + determinism", () => {
     },
   };
 
-  for (const sc of SCENARIOS) {
+  for (const sc of SCENARIOS.filter((x) => !x.id.startsWith("m3-"))) {
     it(`scenario "${sc.id}" produces its actions and replays bit-identically`, () => {
       const sim = new Simulation(42);
       const runner = new CommandRunner(sim, [createScenarioSource(sc)]);
@@ -323,9 +323,9 @@ describe("scenarios + determinism", () => {
           expect(Math.abs(p.x)).toBeLessThanOrEqual(27);
           expect(Math.abs(p.y)).toBeLessThanOrEqual(18);
         }
-        expect(Math.abs(s.ball.x)).toBeLessThanOrEqual(25 + DEFAULT_CONFIG.pitch.goalDepth);
-        expect(Math.abs(s.ball.y)).toBeLessThanOrEqual(16);
-        if (s.ball.inGoal) sim.submit([{ type: "debugPlaceBall", x: 0, y: 0 }]);
+        // The ball may leave play, but never the world (boards around the run-off).
+        expect(Math.abs(s.ball.x)).toBeLessThanOrEqual(25 + DEFAULT_CONFIG.pitch.runOff);
+        expect(Math.abs(s.ball.y)).toBeLessThanOrEqual(16 + DEFAULT_CONFIG.pitch.runOff);
       }
       return { hash: sim.hash(), events: sim.events.length, sim };
     };

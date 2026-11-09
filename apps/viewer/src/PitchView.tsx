@@ -136,6 +136,20 @@ export function PitchView({ state, events, config, selected, overlays, onSelect 
       g.rect(gx, gy, c.pitch.goalDepth * PX_PER_M, c.pitch.goalWidth * PX_PER_M).fill({ color: 0xffeb3b, alpha: 0.75 });
     }
 
+    // Pending restart: spot, exclusion zone, taker.
+    const rs = s.match.restart;
+    if (rs) {
+      const [rx, ry] = p(rs.x, rs.y);
+      const rad = (rs.type === "kickoff" ? c.pitch.centreCircleRadius : c.match.restartDistance) * PX_PER_M;
+      g.circle(rx, ry, rad).fill({ color: rs.team === "blue" ? COLORS.blue : COLORS.red, alpha: 0.12 }).stroke({ width: 2, color: rs.team === "blue" ? COLORS.blue : COLORS.red, alpha: 0.8 });
+      g.circle(rx, ry, 6).stroke({ width: 2, color: 0xffffff });
+      const tk = s.players.find((q) => q.id === rs.taker);
+      if (tk) {
+        const [tx, ty] = p(tk.x, tk.y);
+        g.circle(tx, ty, c.player.radius * PX_PER_M + 8).stroke({ width: 3, color: 0x00e5ff });
+      }
+    }
+
     if (ov) {
       // Contact ranges + legal keeper area for the selected player.
       const sp = s.players.find((q) => q.id === selId);
@@ -145,7 +159,7 @@ export function PitchView({ state, events, config, selected, overlays, onSelect 
         g.circle(sx, sy, c.action.tackleReach * PX_PER_M).stroke({ width: 1.5, color: 0xff9800, alpha: 0.7 });
         if (sp.role === "GK") {
           g.circle(sx, sy, c.action.catchReach * PX_PER_M).stroke({ width: 1.5, color: COLORS.gk, alpha: 0.9 });
-          const left = defendedSide(sp.team) === "left";
+          const left = defendedSide(sp.team, s.match) === "left";
           const [ax, ay] = p(left ? -c.pitch.length / 2 : c.pitch.length / 2 - c.pitch.penaltyAreaDepth, -c.pitch.penaltyAreaWidth / 2);
           g.rect(ax, ay, c.pitch.penaltyAreaDepth * PX_PER_M, c.pitch.penaltyAreaWidth * PX_PER_M).fill({ color: COLORS.gk, alpha: 0.12 });
         }

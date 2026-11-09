@@ -138,48 +138,72 @@ export function resolvePlayerCollisions(players: MutPlayer[], cfg: SimConfig, co
 }
 
 /**
- * Pitch boundaries for the ball. Touchlines and the goal line outside the
- * goal mouth are walls (out-of-play rules arrive in M3). Inside the mouth the
- * ball may cross the goal line into the net, which is a damped box.
+ * Ball boundaries. Touchlines and goal lines are *not* walls: the ball can
+ * leave play (the match layer awards the restart). Physical obstacles are:
+ * the posts, the goal nets (a box behind each mouth that the ball may enter
+ * only through the mouth) and the boards around the run-off area.
+ * `px`/`py` are the ball position at the start of the sub-step.
  */
-function collideBoundaries(ball: MutBall, cfg: SimConfig, counts: ContactCounts): void {
+function collideBoundaries(ball: MutBall, px: number, py: number, cfg: SimConfig, counts: ContactCounts): void {
   const r = cfg.ball.radius;
   const e = cfg.ball.wallRestitution;
   const halfL = cfg.pitch.length / 2;
   const halfW = cfg.pitch.width / 2;
   const gw2 = cfg.pitch.goalWidth / 2;
-  const back = halfL + cfg.pitch.goalDepth - r;
-  const ax = Math.abs(ball.x);
+  const depth = cfg.pitch.goalDepth;
   const sx = ball.x < 0 ? -1 : 1;
+  const pax = Math.abs(px);
+  const wasInNet = pax > halfL && Math.abs(py) < gw2;
 
+  // Crossing the goal-line plane: through the mouth, onto a post, or wide.
+  if (pax <= halfL && Math.abs(ball.x) > halfL) {
+    const ay = Math.abs(ball.y);
+    if (ay >= gw2 - r && ay <= gw2 + r) {
+      ball.x = sx * (halfL - (Math.abs(ball.x) - halfL));
+      ball.vx = -ball.vx * e;
+      counts.ballWall++;
+    }
+  }
+
+  const ax = Math.abs(ball.x);
   if (ax > halfL) {
-    // Inside the goal net (can only get here through the mouth).
-    if (ax > back) {
-      ball.x = sx * back;
-      ball.vx = -ball.vx * NET_RESTITUTION;
+    const inNet = wasInNet || (pax <= halfL && Math.abs(ball.y) < gw2 - r);
+    if (inNet) {
+      const back = halfL + depth - r;
+      if (ax > back) {
+        ball.x = sx * back;
+        ball.vx = -ball.vx * NET_RESTITUTION;
+        counts.ballWall++;
+      }
+      if (Math.abs(ball.y) > gw2 - r) {
+        ball.y = (ball.y < 0 ? -1 : 1) * (gw2 - r);
+        ball.vy = -ball.vy * NET_RESTITUTION;
+        counts.ballWall++;
+      }
+    } else if (Math.abs(ball.y) < gw2 + r && ax < halfL + depth + r) {
+      // Outside the goal, bumping into the side or back of the net.
+      if (Math.abs(py) >= gw2 + r - 1e-9) {
+        ball.y = (py < 0 ? -1 : 1) * (gw2 + r);
+        ball.vy = -ball.vy * NET_RESTITUTION;
+      } else {
+        ball.x = sx * (halfL + depth + r);
+        ball.vx = -ball.vx * NET_RESTITUTION;
+      }
       counts.ballWall++;
     }
-    if (Math.abs(ball.y) > gw2 - r) {
-      ball.y = (ball.y < 0 ? -1 : 1) * (gw2 - r);
-      ball.vy = -ball.vy * NET_RESTITUTION;
-      counts.ballWall++;
-    }
-    return;
   }
-  if (ax > halfL - r && Math.abs(ball.y) > gw2 - r) {
-    // Goal line outside the mouth (incl. posts): reflect.
-    ball.x = sx * (halfL - r - (ax - (halfL - r)) * e);
-    ball.vx = -ball.vx * e;
+
+  // Boards around the run-off.
+  const lx = halfL + cfg.pitch.runOff - r;
+  const ly = halfW + cfg.pitch.runOff - r;
+  if (Math.abs(ball.x) > lx) {
+    ball.x = sx * lx;
+    ball.vx = -ball.vx * e * 0.5;
     counts.ballWall++;
   }
-  const ly = halfW - r;
-  if (ball.y < -ly) {
-    ball.y = -ly + (-ly - ball.y) * e;
-    ball.vy = -ball.vy * e;
-    counts.ballWall++;
-  } else if (ball.y > ly) {
-    ball.y = ly - (ball.y - ly) * e;
-    ball.vy = -ball.vy * e;
+  if (Math.abs(ball.y) > ly) {
+    ball.y = (ball.y < 0 ? -1 : 1) * ly;
+    ball.vy = -ball.vy * e * 0.5;
     counts.ballWall++;
   }
 }
@@ -208,9 +232,11 @@ export function integrateBall(
   const touched = new Set<number>();
 
   for (let s = 0; s < n; s++) {
+    const px = ball.x;
+    const py = ball.y;
     ball.x += ball.vx * h;
     ball.y += ball.vy * h;
-    collideBoundaries(ball, cfg, counts);
+    collideBoundaries(ball, px, py, cfg, counts);
 
     // Goal: the whole ball has crossed the goal line between the posts.
     if (ball.inGoal === null && Math.abs(ball.x) > halfL + bc.radius && Math.abs(ball.y) < gw2) {
@@ -246,7 +272,7 @@ export function integrateBall(
   counts.playerBall += touched.size;
 
   // The net absorbs the ball: heavy damping once it is behind the goal line.
-  if (Math.abs(ball.x) > halfL) {
+  if (Math.abs(ball.x) > halfL && Math.abs(ball.y) < gw2) {
     ball.vx *= NET_DAMPING;
     ball.vy *= NET_DAMPING;
   }

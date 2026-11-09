@@ -33,6 +33,7 @@ function isolatedWorld(overrides: Partial<Record<PlayerId, { x: number; y: numbe
   const base = createWorld(1);
   return {
     ...base,
+    match: { ...base.match, period: "firstHalf", phase: "openPlay", resumeTick: 0 },
     players: base.players.map((p, i) => ({ ...p, x: -22 + i * 4.5, y: -14, ...overrides[p.id] })),
     ball,
   };
@@ -244,14 +245,14 @@ describe("collisions", () => {
     expect(prev).toBeLessThan(8);
   });
 
-  it("ball bounces off boundaries and stays on the pitch", () => {
+  it("ball is stopped by the boards around the run-off and never leaves the world", () => {
     let s = isolatedWorld({}, { x: 22, y: 5, vx: 15, vy: 9 });
     let walls = 0;
     for (let i = 0; i < 600; i++) {
       s = step(s).state;
       walls += s.contacts.ballWall;
-      expect(Math.abs(s.ball.x)).toBeLessThanOrEqual(25);
-      expect(Math.abs(s.ball.y)).toBeLessThanOrEqual(16);
+      expect(Math.abs(s.ball.x)).toBeLessThanOrEqual(25 + 2);
+      expect(Math.abs(s.ball.y)).toBeLessThanOrEqual(16 + 2);
     }
     expect(walls).toBeGreaterThan(0);
   });
@@ -304,12 +305,4 @@ describe("determinism", () => {
     expect(sim.log[0]!.tick).toBe(6);
   });
 
-  it("match clock runs two 120 s halves", () => {
-    expect(clockOf(0).half).toBe(1);
-    expect(clockOf(60 * 119).half).toBe(1);
-    expect(clockOf(60 * 120).half).toBe(2);
-    expect(clockOf(60 * 240).finished).toBe(true);
-    const short = makeConfig({ halfDurationSec: 10 });
-    expect(clockOf(60 * 20, short).finished).toBe(true);
-  });
 });
