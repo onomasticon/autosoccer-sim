@@ -2,7 +2,9 @@ import { SCENARIOS } from "@autosoccer/controller-runtime";
 import type { LoggedEvent } from "@autosoccer/sim-core";
 import { ENGINE_VERSION, hashState } from "@autosoccer/sim-core";
 import { useEffect, useMemo, useReducer, useState } from "react";
+import { ActionLog } from "./ActionLog.tsx";
 import { ControllerPanel } from "./ControllerPanel.tsx";
+import { Timeline } from "./Timeline.tsx";
 import { ViewerEngine } from "./engine.ts";
 import { PRESETS } from "./presets.ts";
 import { PitchView } from "./PitchView.tsx";
@@ -118,8 +120,8 @@ export function App() {
   const hash = hashState(s);
   const v = engine.lastVerify;
   const log = [
-    ...sim.events.slice(-12).map((le) => ({ tick: le.tick, text: describeEvent(le), kind: le.event.type === "goal" ? "goal" : "event" })),
-    ...sim.rejections.slice(-8).map((r) => ({ tick: r.tick, text: `✘ ${(r.command as { playerId?: string }).playerId ?? ""} ${(r.command as { type?: string }).type}: ${r.reason}`, kind: "rejected" })),
+    ...engine.events.slice(-12).map((le) => ({ tick: le.tick, text: describeEvent(le), kind: le.event.type === "goal" ? "goal" : "event" })),
+    ...engine.rejections.slice(-8).map((r) => ({ tick: r.tick, text: `✘ ${(r.command as { playerId?: string }).playerId ?? ""} ${(r.command as { type?: string }).type}: ${r.reason}`, kind: "rejected" })),
   ]
     .sort((a, b) => b.tick - a.tick)
     .slice(0, 9);
@@ -128,7 +130,7 @@ export function App() {
     <div className="app">
       <header>
         <h1>autosoccer-sim</h1>
-        <span className="muted">engine v{ENGINE_VERSION} · M5 Blue possession vs Red counter</span>
+        <span className="muted">engine v{ENGINE_VERSION} · M6 viewer + replay</span>
         <div className="scoreboard" data-testid="scoreboard">
           <span className="team blue">BLUE {s.match.defends.blue === "left" ? "→" : "←"}</span>
           <span className="score" data-testid="score">{s.match.score.blue} – {s.match.score.red}</span>
@@ -141,10 +143,11 @@ export function App() {
         </div>
       </header>
       <main>
-        <div className="pitch-wrap">
-          {banner(s) && <div className="banner" data-testid="banner">{banner(s)}</div>}
-        <PitchView state={s} events={sim.events} debug={engine.mode === "controllers" && engine.overlays ? { blue: engine.controllers.blue?.last?.debug ?? null, red: engine.controllers.red?.last?.debug ?? null } : null} config={sim.config} selected={engine.selected} overlays={engine.overlays} onSelect={(id) => engine.select(id)} />
-          {engine.mode === "controllers" && <ControllerPanel engine={engine} />}
+        <div className={`pitch-wrap ${engine.fit ? "fit" : ""}`}>
+          {banner(s) && <div className={`banner ${s.match.phase === "goalScored" ? "goal" : ""}`} data-testid="banner">{banner(s)}</div>}
+        <PitchView state={s} events={engine.events} debug={(engine.mode === "controllers" || engine.mode === "replay") && engine.overlays ? { blue: (engine.decision("blue") as never) ?? null, red: (engine.decision("red") as never) ?? null } : null} config={sim.config} selected={engine.selected} overlays={engine.overlays} onSelect={(id) => engine.select(id)} />
+          {(engine.mode === "controllers" || engine.mode === "replay") && <Timeline engine={engine} />}
+          {(engine.mode === "controllers" || engine.mode === "replay") && <ControllerPanel engine={engine} />}
         </div>
         <aside>
           <section>
@@ -191,13 +194,52 @@ export function App() {
             <div><span>Tick</span><b data-testid="tick">{s.tick}</b></div>
             <div><span>Sim time</span><b>{clock.totalSeconds.toFixed(2)} s</b></div>
             <div><span>State hash</span><b className="mono" data-testid="hash">{hash}</b></div>
-            <div><span>Commands logged</span><b>{sim.log.reduce((n, e) => n + e.commands.length, 0)}</b></div>
+            <div><span>Commands {engine.player ? "(replayed)" : "logged"}</span><b>{(engine.player ? engine.player.replay.commands.filter((e) => e.tick < s.tick) : sim.log).reduce((n, e) => n + e.commands.length, 0)}</b></div>
             <div><span>Contacts (tick)</span><b>P–P {s.contacts.playerPlayer} · P–B {s.contacts.playerBall} · wall {s.contacts.ballWall}</b></div>
             <div><span>Ball</span><b className="mono">({s.ball.x.toFixed(2)}, {s.ball.y.toFixed(2)}) |v| {Math.hypot(s.ball.vx, s.ball.vy).toFixed(2)}</b></div>
             <div><span>Ball state</span><b>{s.ball.heldBy ? `held by ${s.ball.heldBy}` : s.ball.inGoal ? `in ${s.ball.inGoal} goal` : "free"}{s.ball.lastTouch ? ` · last ${s.ball.lastTouch}` : ""}</b></div>
           </section>
-          <section>
-            <button data-testid="verify" onClick={() => engine.verify()}>Verify determinism</button>
+          <section data-testid="replay-section">
+            <h3>Replay {engine.player && <span className="badge ok">REPLAY MODE</span>}</h3>
+            <div className="replay-bar">
+              {!engine.player && (
+                <button data-testid="save-replay" onClick={() => {
+                  const r = engine.saveReplay();
+                  const blob = new Blob([JSON.stringify(r)], { type: "application/json" });
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `autosoccer-seed${r.seed}-t${r.finalTick}.replay.json`;
+                  a.click();
+                  URL.revokeObjectURL(a.href);
+                }}>💾 Save replay</button>
+              )}
+              <label className="filebtn">📂 Load replay
+                <input data-testid="load-replay" type="file" accept=".json" style={{ display: "none" }} onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (f) engine.openReplay(await f.text());
+                  e.target.value = "";
+                }} />
+              </label>
+              {engine.player ? (
+                <>
+                  <button data-testid="verify-replay" onClick={() => engine.verifyReplay()}>Verify replay hashes</button>
+                  <button onClick={() => engine.setMode("controllers")}>Back to live</button>
+                </>
+              ) : (
+                <button data-testid="verify" onClick={() => engine.verify()}>Verify determinism</button>
+              )}
+              <label><input data-testid="fit" type="checkbox" checked={engine.fit} onChange={(e) => engine.setFit(e.target.checked)} /> Fit to window</label>
+            </div>
+            {engine.player && (
+              <div className="small muted">
+                {engine.player.replay.controllers.blue?.name ?? "?"} vs {engine.player.replay.controllers.red?.name ?? "?"} · seed {engine.player.replay.seed} · engine {engine.player.replay.engineVersion} · {engine.player.replay.snapshots.length} snapshots · {engine.player.replay.hashes.length} hashes
+              </div>
+            )}
+            {engine.lastReplayVerify && (
+              <div data-testid="replay-verify-result" className={engine.lastReplayVerify.ok ? "ok" : "bad"}>
+                {engine.lastReplayVerify.ok ? "✔" : "✘"} {engine.lastReplayVerify.checked} hash checkpoints re-simulated · {engine.lastReplayVerify.mismatches.length} mismatches · final {engine.lastReplayVerify.finalOk ? "✔" : "✘"}
+              </div>
+            )}
             {v && (
               <div data-testid="verify-result" className={v.match ? "ok" : "bad"}>
                 {v.match ? "✔ MATCH" : "✘ MISMATCH"} at tick {v.tick}
@@ -230,6 +272,8 @@ export function App() {
             ) : (
               <p className="muted">Click a player to inspect / control.</p>
             )}
+            {sel && <h3 style={{ marginTop: 8 }}>Issued vs executed (last 5 s)</h3>}
+            <ActionLog engine={engine} />
           </section>
         </aside>
       </main>

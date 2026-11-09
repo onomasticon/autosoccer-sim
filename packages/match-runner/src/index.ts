@@ -55,3 +55,4 @@ export function runHeadless(opts: HeadlessOptions): HeadlessResult {
 export * from "./soak.ts";
 export * from "./controllers.ts";
 export * from "./stats.ts";
+export * from "./record.ts";

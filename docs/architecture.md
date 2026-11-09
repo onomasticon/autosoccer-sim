@@ -1,4 +1,4 @@
-# Architecture (M5)
+# Architecture (M6)
 
 ```
             ┌────────────────────┐        ┌──────────────────────┐
@@ -55,3 +55,11 @@
    for the same run on Bun, Node and Chrome. sim-core and command sources use `dsin/dcos/datan2/dhypot`,
    built only from `+ − × ÷ sqrt`, which IEEE-754 requires to be exact. `tests/golden.json` holds
    hashes generated under Bun; Vitest checks them under Node, and the walkthrough checks them in Chrome.
+
+## Replays (M6)
+
+`telemetry/src/replay.ts` defines the replay file format (v1), `ReplayRecorder` (snapshots every
+600 ticks, hashes every 60) and `ReplayPlayer` (seek and verify). `match-runner/src/record.ts`
+turns a run plus its sandboxed controllers into a replay. The viewer records every live run and
+plays replays through the same `PitchView`, controller inspector, action log and timeline;
+replay mode never executes controllers. See [replays.md](replays.md).

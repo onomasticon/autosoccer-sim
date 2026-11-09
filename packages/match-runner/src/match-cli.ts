@@ -1,8 +1,10 @@
 #!/usr/bin/env bun
 /**
- * bun run match --blue examples/controllers/chaser.js --red examples/controllers/zonal.js [--seed 42] [--verify] [--log]
+ * bun run match --blue examples/controllers/blue-possession.js --red examples/controllers/red-counter.js
+ *               [--seed 42] [--verify] [--log] [--record out/match.replay.json]
  */
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { hashState, Simulation } from "@autosoccer/sim-core";
 import { runtimeId } from "@autosoccer/telemetry";
 import { runControllerMatch } from "./controllers.ts";
@@ -11,10 +13,11 @@ const arg = (n: string) => {
   const i = process.argv.indexOf(`--${n}`);
   return i >= 0 ? process.argv[i + 1] : undefined;
 };
-const bluePath = arg("blue") ?? "examples/controllers/chaser.js";
-const redPath = arg("red") ?? "examples/controllers/zonal.js";
+const bluePath = arg("blue") ?? "examples/controllers/blue-possession.js";
+const redPath = arg("red") ?? "examples/controllers/red-counter.js";
+const recordPath = arg("record");
 const seed = Number(arg("seed") ?? 42);
-const r = await runControllerMatch({ seed, blue: { source: readFileSync(bluePath, "utf8"), label: bluePath }, red: { source: readFileSync(redPath, "utf8"), label: redPath } });
+const r = await runControllerMatch({ seed, blue: { source: readFileSync(bluePath, "utf8"), label: bluePath }, red: { source: readFileSync(redPath, "utf8"), label: redPath }, record: !!recordPath });
 const m = r.state.match;
 console.log(`runtime   ${runtimeId()} · seed ${seed}`);
 console.log(`blue      ${r.blue.name}${r.blue.version ? ` v${r.blue.version}` : ""}  (${bluePath})`);
@@ -29,4 +32,10 @@ if (process.argv.includes("--verify")) {
   const h = hashState(Simulation.replay(seed, r.sim.log, r.state.tick, r.sim.config));
   console.log(`replay    ${h}  ${h === r.finalHash ? "MATCH (no controllers executed)" : "MISMATCH"}`);
   if (h !== r.finalHash) process.exit(1);
+}
+if (recordPath && r.replay) {
+  mkdirSync(dirname(recordPath), { recursive: true });
+  const text = JSON.stringify(r.replay);
+  writeFileSync(recordPath, text);
+  console.log(`replay    ${recordPath} (${(text.length / 1024).toFixed(0)} KB · ${r.replay.snapshots.length} snapshots · ${r.replay.hashes.length} hashes · ${r.replay.events.length} events · ${r.replay.decisions.length} decisions)`);
 }

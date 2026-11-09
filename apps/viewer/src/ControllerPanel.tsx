@@ -23,50 +23,64 @@ const KIND_CLASS: Record<string, string> = {
 };
 
 function TeamColumn({ engine, team }: { engine: ViewerEngine; team: "blue" | "red" }) {
-  const c: SandboxedController | null = engine.controllers[team];
+  const replay = engine.player?.replay ?? null;
+  const c: SandboxedController | null = replay ? null : engine.controllers[team];
+  const ident = replay ? replay.controllers[team] ?? null : c ? { name: c.name, version: c.version, disabled: c.disabled, label: c.label, sourceHash: c.sourceHash } : null;
   const slot = engine.scripts[team];
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(slot.source);
-  const last = c?.last;
-  const diags: ControllerDiagnostic[] = c ? c.diagnostics.slice(-7).reverse() : [];
+  const last = engine.decision(team);
+  const tick = engine.sim.state.tick;
+  const diags: Array<{ tick: number; kind: string; message: string }> = replay
+    ? replay.diagnostics.filter((d) => d.team === team && d.tick < tick).slice(-7).reverse()
+    : c
+      ? (c.diagnostics as ControllerDiagnostic[]).slice(-7).reverse()
+      : [];
+  const disabledNow = replay ? replay.diagnostics.some((d) => d.team === team && d.kind === "disabled" && d.tick < tick) : !!c?.disabled;
 
   return (
     <div className={`ctrl ${team}`} data-testid={`ctrl-${team}`}>
       <div className="ctrl-head">
         <b className={team}>{team.toUpperCase()}</b>
-        <span className="mono">{c ? `${c.name}${c.version ? ` v${c.version}` : ""}` : "—"}</span>
-        <span className={`badge ${c?.disabled ? "bad" : "ok"}`} data-testid={`status-${team}`}>{c?.disabled ? "FALLBACK (disabled)" : "SANDBOXED · OK"}</span>
-        <select
-          data-testid={`preset-${team}`}
-          value={slot.label}
-          onChange={(e) => {
-            const label = e.target.value;
-            setDraft(PRESETS[label]!);
-            engine.setScript(team, { label, source: PRESETS[label]! });
-          }}
-        >
-          {Object.keys(PRESETS).map((k) => <option key={k} value={k}>{k}</option>)}
-          {!PRESETS[slot.label] && <option value={slot.label}>{slot.label}</option>}
-        </select>
-        <button data-testid={`edit-${team}`} onClick={() => { setDraft(slot.source); setEditing(!editing); }}>{editing ? "Close editor" : "Edit script"}</button>
+        <span className="mono">{ident ? `${ident.name}${ident.version ? ` v${ident.version}` : ""}` : "—"}</span>
+        <span className={`badge ${disabledNow ? "bad" : "ok"}`} data-testid={`status-${team}`}>{disabledNow ? "FALLBACK (disabled)" : replay ? "REPLAY · not executed" : "SANDBOXED · OK"}</span>
+        {replay ? (
+          <span className="small muted mono">source {ident?.sourceHash ?? "?"}</span>
+        ) : (
+          <>
+            <select
+              data-testid={`preset-${team}`}
+              value={slot.label}
+              onChange={(e) => {
+                const label = e.target.value;
+                setDraft(PRESETS[label]!);
+                engine.setScript(team, { label, source: PRESETS[label]! });
+              }}
+            >
+              {Object.keys(PRESETS).map((k) => <option key={k} value={k}>{k}</option>)}
+              {!PRESETS[slot.label] && <option value={slot.label}>{slot.label}</option>}
+            </select>
+            <button data-testid={`edit-${team}`} onClick={() => { setDraft(slot.source); setEditing(!editing); }}>{editing ? "Close editor" : "Edit script"}</button>
+          </>
+        )}
       </div>
-      {editing ? (
+      {editing && !replay ? (
         <div className="editor">
           <textarea data-testid={`editor-${team}`} value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false} />
           <button data-testid={`apply-${team}`} onClick={() => { engine.setScript(team, { label: `${slot.label.replace(/ \(edited\)$/, "")} (edited)`, source: draft }); }}>Apply &amp; restart match</button>
         </div>
       ) : (
         <div className="ctrl-body">
-          <div className="small muted">updates {c?.updates ?? 0} · avg CPU {c && c.updates ? (c.totalOps / c.updates).toFixed(2) : "0"} / {80} budget units</div>
-          {last?.debug?.mode && (
+          {!replay && <div className="small muted">updates {c?.updates ?? 0} · avg CPU {c && c.updates ? (c.totalOps / c.updates).toFixed(2) : "0"} / {80} budget units</div>}
+          {last?.mode && (
             <div className="decision" data-testid={`decision-${team}`}>
-              <b>{last.debug.mode}</b>
-              {(last.debug.notes ?? []).slice(0, 3).map((n, i) => <div key={i} className="small">{n}</div>)}
+              <b>{last.mode}</b>
+              {last.notes.slice(0, 3).map((n, i) => <div key={i} className="small">{n}</div>)}
             </div>
           )}
           <div className="small">
             <b>last decision</b> {last ? `t=${last.tick} · ${last.status}` : "—"}
-            {last && last.actions && <> · {last.actions.length} actions → {last.commands.length} commands</>}
+            {last && last.actions && <> · {last.actions.length} actions issued{last.rejected.length ? ` · ${last.rejected.length} invalid` : ""}</>}
           </div>
           <div className="actions mono small" data-testid={`actions-${team}`}>
             {(last?.actions ?? []).slice(0, 5).map((a, i) => <div key={i}>{fmtAction(a)}</div>)}
