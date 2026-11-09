@@ -3,10 +3,10 @@
 Deterministic 5v5 2D soccer simulation with scriptable team controllers.
 Headless TypeScript engine, Bun workspace, React + PixiJS viewer.
 
-> **Status: M4**: versioned controller SDK, sandboxed team scripts and independent scripted teams (on top of M1–M3).
+> **Status: M5**: Blue possession vs Red counterattack, two complete, tactically distinct sandboxed controllers (on top of M1–M4).
 > Roadmap: see the milestone issues (M1–M7).
 
-![viewer](docs/media/m4/01-two-scripts.png)
+![viewer](docs/media/m5/02-blue-passing.png)
 
 ## Quickstart
 
@@ -14,11 +14,14 @@ Requires **Bun 1.2.19** (pinned in `.bun-version` / `packageManager`). Node ≥ 
 
 ```sh
 bun install
+bun run demo                      # one command: viewer opens and plays Blue vs Red at 4×
 bun run dev                       # viewer at http://127.0.0.1:5173/?seed=42
 bun run headless --seed 42 --verify --out out/run-42.jsonl
 bun run test                      # Vitest (Node/V8) + golden hashes under Bun/JSC
 bun run soak --matches 1000       # 1,000 seeded full matches: must all reach full time
-bun run match --blue examples/controllers/chaser.js --red examples/controllers/zonal.js --verify
+bun run match --blue examples/controllers/blue-possession.js --red examples/controllers/red-counter.js --verify
+bun run bvr --matches 100         # 100 seeded Blue vs Red matches + action profiles
+bun run coverage:api              # regenerates docs/api-coverage.md
 bun run typecheck
 ```
 
@@ -41,7 +44,7 @@ defineController({
 });
 ```
 
-See [docs/controller-sdk.md](docs/controller-sdk.md) and `examples/controllers/`.
+See [docs/controller-sdk.md](docs/controller-sdk.md), [docs/tactics.md](docs/tactics.md) and `examples/controllers/`.
 
 ## Layout
 
@@ -59,7 +62,7 @@ See [docs/architecture.md](docs/architecture.md) and [docs/simulation.md](docs/s
 
 ## Walkthrough recording
 
-`bun run dev` in one terminal, then `bun run walkthrough` records `docs/media/m4/walkthrough.mp4`,
+`bun run dev` in one terminal, then `bun run walkthrough` records `docs/media/m5/walkthrough.mp4`,
 a GIF preview and screenshots by driving the real viewer with Playwright (`walkthrough:m1` to
-`walkthrough:m3` re-record earlier milestones). The script fails if an expected scenario event/rejection is missing or if
+`walkthrough:m4` re-record earlier milestones). The script fails if an expected scenario event/rejection is missing or if
 browser and headless hashes differ.

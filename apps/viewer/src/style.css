@@ -55,3 +55,5 @@ aside { width: 360px; }
 .ctrl .diags div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ctrl .warn { color: #e3b341; }
 .editor textarea { width: 100%; height: 150px; background: #0d1117; color: #e6edf3; font: 11px ui-monospace, monospace; border: 1px solid #30363d; border-radius: 6px; box-sizing: border-box; }
+.decision { background: #0d1117; border-radius: 6px; padding: 4px 8px; margin: 4px 0; color: #e6edf3; }
+.decision b { color: #ffd54f; text-transform: uppercase; font-size: 11px; letter-spacing: .5px; }

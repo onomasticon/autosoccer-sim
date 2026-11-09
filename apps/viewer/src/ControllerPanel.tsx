@@ -58,6 +58,12 @@ function TeamColumn({ engine, team }: { engine: ViewerEngine; team: "blue" | "re
       ) : (
         <div className="ctrl-body">
           <div className="small muted">updates {c?.updates ?? 0} · avg CPU {c && c.updates ? (c.totalOps / c.updates).toFixed(2) : "0"} / {80} budget units</div>
+          {last?.debug?.mode && (
+            <div className="decision" data-testid={`decision-${team}`}>
+              <b>{last.debug.mode}</b>
+              {(last.debug.notes ?? []).slice(0, 3).map((n, i) => <div key={i} className="small">{n}</div>)}
+            </div>
+          )}
           <div className="small">
             <b>last decision</b> {last ? `t=${last.tick} · ${last.status}` : "—"}
             {last && last.actions && <> · {last.actions.length} actions → {last.commands.length} commands</>}

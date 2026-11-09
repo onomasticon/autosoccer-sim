@@ -1,4 +1,4 @@
-# Architecture (M4)
+# Architecture (M5)
 
 ```
             ┌────────────────────┐        ┌──────────────────────┐
@@ -41,7 +41,8 @@
   engine rejections since its previous decision. It drops any team-source command for the other
   team's players or of a debug type, and calls `onMatchEnd` at full time.
 - **Versioning:** `ENGINE_VERSION` is `0.3.0` (unchanged in M4).
-  `SDK_VERSION` is `1.0.0`, with observation and action schemas at `1.0`.
+  `SDK_VERSION` is `1.1.0` (adds the `Soccer` helpers and the optional `debug` trace), with observation and action schemas still at `1.0`.
+- **Featured controllers (M5):** `examples/controllers/blue-possession.js` and `red-counter.js` (see `docs/tactics.md`). Statistics and profiles live in `match-runner/src/stats.ts`, the batch runner is `bun run bvr`, and `scripts/api-coverage.ts` writes `docs/api-coverage.md`.
 
 ## Determinism
 

@@ -2,7 +2,8 @@
  * @autosoccer/controller-sdk — the public, versioned contract between the
  * simulation and team controllers.
  *
- *   SDK_VERSION 1.0.0 · observation schema "1.0" · action schema "1.0"
+ *   SDK_VERSION 1.1.0 · observation schema "1.0" · action schema "1.0"
+ *   1.1: `Soccer` helper library in the sandbox; optional `debug` output from update.
  *
  * Controllers see only plain JSON observations (built here from the world
  * state; no engine references) and return plain JSON actions, which are
@@ -12,7 +13,8 @@
 import type { EngineCommand, LoggedEvent, Period, Phase, PlayerId, RestartType, Role, SimConfig, SimEvent, TeamId, WorldState } from "@autosoccer/sim-core";
 import { attackSign, DEFAULT_CONFIG, ENGINE_VERSION } from "@autosoccer/sim-core";
 
-export const SDK_VERSION = "1.0.0";
+export const SDK_VERSION = "1.1.0";
+export { HELPERS_SOURCE } from "./helpers-source.ts";
 export const OBSERVATION_SCHEMA_VERSION = "1.0";
 export const ACTION_SCHEMA_VERSION = "1.0";
 /** Max actions accepted from one update call; extra actions are rejected. */
@@ -133,12 +135,46 @@ export type Action =
 
 export const ACTION_TYPES = ["moveTo", "stop", "sprint", "kick", "tackle", "catchBall", "releaseBall"] as const;
 
+/**
+ * Optional decision trace a controller may return alongside its actions
+ * (SDK ≥ 1.1). Shown in the viewer; never affects the simulation.
+ */
+export interface ControllerDebug {
+  /** Current tactical mode, e.g. "build-up", "press", "counter". */
+  mode?: string;
+  /** Short notes, e.g. "B4 → B5 pass (lane 3.1 m)". At most 6 are shown. */
+  notes?: string[];
+  /** Lines to draw on the pitch (pass targets, runs, press assignments). */
+  lines?: Array<{ from: Vec; to: Vec; kind?: "pass" | "shot" | "run" | "press" | "cover" }>;
+}
+
+export const MAX_DEBUG_BYTES = 4096;
+
+/** Validate/normalise a debug payload; returns null if absent or malformed. */
+export function sanitizeDebug(d: unknown): ControllerDebug | null {
+  if (typeof d !== "object" || d === null) return null;
+  const o = d as Record<string, unknown>;
+  const out: ControllerDebug = {};
+  if (typeof o.mode === "string") out.mode = o.mode.slice(0, 40);
+  if (Array.isArray(o.notes)) out.notes = o.notes.filter((n) => typeof n === "string").slice(0, 6).map((n) => (n as string).slice(0, 120));
+  if (Array.isArray(o.lines)) {
+    out.lines = o.lines
+      .filter((l) => isVec((l as { from?: unknown })?.from) && isVec((l as { to?: unknown })?.to))
+      .slice(0, 12)
+      .map((l) => {
+        const k = (l as { kind?: unknown }).kind;
+        return { from: (l as { from: Vec }).from, to: (l as { to: Vec }).to, kind: (["pass", "shot", "run", "press", "cover"] as const).find((x) => x === k) ?? "run" };
+      });
+  }
+  return out;
+}
+
 /** A controller as authored: plain object with lifecycle callbacks. */
 export interface ControllerDefinition {
   name?: string;
   version?: string;
   initialize?(info: MatchInfo): void;
-  update(obs: Observation): Action[] | { actions: Action[] } | void;
+  update(obs: Observation): Action[] | { actions: Action[]; debug?: ControllerDebug } | void;
   onMatchEnd?(result: MatchResult): void;
 }
 

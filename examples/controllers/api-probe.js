@@ -19,6 +19,7 @@ defineController({
   },
   update(obs) {
     seen.updates++;
+    if (obs.period !== seen.period) { console.log(`period ${seen.period || "-"} → ${obs.period} (phase ${obs.phase}, attacking ${obs.attackingDirection > 0 ? "+x" : "-x"})`); seen.period = obs.period; }
     for (const e of obs.events) seen.events[e.type] = (seen.events[e.type] || 0) + 1;
     seen.rejected += obs.rejected.length;
     const acts = [];

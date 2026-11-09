@@ -1,3 +1,4 @@
+import type { ControllerDebug } from "@autosoccer/controller-sdk";
 import type { LoggedEvent, PlayerId, SimConfig, WorldState } from "@autosoccer/sim-core";
 import { defendedSide } from "@autosoccer/sim-core";
 import { Application, Container, Graphics, Text } from "pixi.js";
@@ -23,6 +24,8 @@ const COLORS = {
 interface Props {
   state: WorldState;
   events: readonly LoggedEvent[];
+  /** Controller decision traces to draw (SDK debug output), per team. */
+  debug?: { blue: ControllerDebug | null; red: ControllerDebug | null } | null;
   config: SimConfig;
   selected: PlayerId | null;
   overlays: boolean;
@@ -67,11 +70,11 @@ function drawPitch(g: Graphics, cfg: SimConfig): void {
   }
 }
 
-export function PitchView({ state, events, config, selected, overlays, onSelect }: Props) {
+export function PitchView({ state, events, debug, config, selected, overlays, onSelect }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const appRef = useRef<{ app: Application; dyn: Graphics; labels: Container; texts: Map<string, Text> } | null>(null);
-  const propsRef = useRef<Props>({ state, events, config, selected, overlays, onSelect });
-  propsRef.current = { state, events, config, selected, overlays, onSelect };
+  const propsRef = useRef<Props>({ state, events, debug, config, selected, overlays, onSelect });
+  propsRef.current = { state, events, debug, config, selected, overlays, onSelect };
 
   useEffect(() => {
     let destroyed = false;
@@ -123,7 +126,7 @@ export function PitchView({ state, events, config, selected, overlays, onSelect 
   function render() {
     const r = appRef.current;
     if (!r) return;
-    const { state: s, events: evs, config: c, selected: selId, overlays: ov } = propsRef.current;
+    const { state: s, events: evs, debug: dbg, config: c, selected: selId, overlays: ov } = propsRef.current;
     const p = toPx(c);
     const g = r.dyn;
     g.clear();
@@ -134,6 +137,29 @@ export function PitchView({ state, events, config, selected, overlays, onSelect 
       const side = s.ball.inGoal === "left" ? -1 : 1;
       const [gx, gy] = p(side < 0 ? -c.pitch.length / 2 - c.pitch.goalDepth : c.pitch.length / 2, -c.pitch.goalWidth / 2);
       g.rect(gx, gy, c.pitch.goalDepth * PX_PER_M, c.pitch.goalWidth * PX_PER_M).fill({ color: 0xffeb3b, alpha: 0.75 });
+    }
+
+    // Controller decision traces (passes, shots, runs, press/cover assignments).
+    if (dbg) {
+      for (const team of ["blue", "red"] as const) {
+        const d = dbg[team];
+        if (!d?.lines) continue;
+        const base = team === "blue" ? 0x8ab4ff : 0xff8a8a;
+        for (const l of d.lines) {
+          const [x0, y0] = p(l.from.x, l.from.y);
+          const [x1, y1] = p(l.to.x, l.to.y);
+          const color = l.kind === "shot" ? 0xffeb3b : l.kind === "pass" ? base : l.kind === "press" ? 0xff9800 : 0xb0bec5;
+          const width = l.kind === "pass" || l.kind === "shot" ? 3 : 2;
+          // Dashed line.
+          const len = Math.hypot(x1 - x0, y1 - y0);
+          const n = Math.max(1, Math.floor(len / 8));
+          for (let i = 0; i < n; i += 2) {
+            const a = i / n, b = Math.min(1, (i + 1) / n);
+            g.moveTo(x0 + (x1 - x0) * a, y0 + (y1 - y0) * a).lineTo(x0 + (x1 - x0) * b, y0 + (y1 - y0) * b).stroke({ width, color, alpha: 0.95 });
+          }
+          if (l.kind === "pass" || l.kind === "shot") g.circle(x1, y1, 4).fill(color);
+        }
+      }
     }
 
     // Pending restart: spot, exclusion zone, taker.
