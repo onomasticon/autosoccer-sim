@@ -40,3 +40,18 @@ input, select { background: #0d1117; color: #e6edf3; border: 1px solid #30363d; 
 .log.goal { color: #ffeb3b; font-weight: 700; }
 .log .mono { color: #8b98a5; }
 aside { width: 360px; }
+.ctrl-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; width: 1008px; }
+.ctrl { min-width: 0; overflow: hidden; background: #1b232c; border-radius: 8px; padding: 8px 10px; font-size: 12px; border-top: 3px solid #333; min-height: 170px; }
+.ctrl.blue { border-top-color: #1e63d6; }
+.ctrl.red { border-top-color: #d62f2f; }
+.ctrl-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+.ctrl-head b.blue { color: #6ea8ff; }
+.ctrl-head b.red { color: #ff7b7b; }
+.ctrl-head select, .ctrl-head button { font-size: 12px; padding: 3px 8px; }
+.badge { padding: 1px 7px; border-radius: 9px; font-size: 11px; font-weight: 700; }
+.badge.ok { background: #1f6f3f; }
+.badge.bad { background: #8b1d1d; }
+.ctrl .actions { margin: 4px 0; color: #cfe3ff; min-height: 60px; }
+.ctrl .diags div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ctrl .warn { color: #e3b341; }
+.editor textarea { width: 100%; height: 150px; background: #0d1117; color: #e6edf3; font: 11px ui-monospace, monospace; border: 1px solid #30363d; border-radius: 6px; box-sizing: border-box; }

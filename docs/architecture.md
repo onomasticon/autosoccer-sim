@@ -1,4 +1,4 @@
-# Architecture (M3)
+# Architecture (M4)
 
 ```
             ┌────────────────────┐        ┌──────────────────────┐
@@ -34,9 +34,14 @@
 - **Baseline controllers** (`controller-runtime/src/restarts.ts`): `restartCommands` and
   `approachAndKick` helpers, plus safe, idle and chaos controllers used by `bun run soak`
   (`match-runner/src/soak.ts`).
-- **Versioning:** `ENGINE_VERSION` is `0.3.0` (M3 adds `WorldState.match`).
-  `SDK_VERSION` is `0.1.0`. The command schema is still engine-internal; the public, versioned
-  controller action schema is M4.
+- **Controllers (M4):** `controller-sdk` builds team-relative JSON observations and validates and
+  translates actions (SDK 1.0). `controller-runtime/src/sandbox.ts` runs each script in its own
+  QuickJS/WASM runtime with memory and deterministic CPU limits, failure diagnostics and a safe
+  fallback. `CommandRunner` gives every source the same pre-decision state plus its events and
+  engine rejections since its previous decision. It drops any team-source command for the other
+  team's players or of a debug type, and calls `onMatchEnd` at full time.
+- **Versioning:** `ENGINE_VERSION` is `0.3.0` (unchanged in M4).
+  `SDK_VERSION` is `1.0.0`, with observation and action schemas at `1.0`.
 
 ## Determinism
 

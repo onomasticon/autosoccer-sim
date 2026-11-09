@@ -1,7 +1,7 @@
 /**
  * @autosoccer/controller-runtime — runs command sources against a Simulation
- * at the controller cadence. Runs in-process debug sources with error
- * isolation; sandboxed untrusted controllers arrive in M4.
+ * at the controller cadence: built-in baselines, debug scripts, and sandboxed
+ * untrusted controllers (see sandbox.ts).
  */
 import type { CommandSource } from "@autosoccer/controller-sdk";
 import type { EngineCommand, PlayerId, SimConfig, Simulation, WorldState } from "@autosoccer/sim-core";
@@ -11,16 +11,26 @@ import { restartCommands } from "./restarts.ts";
 export interface SourceDiagnostic {
   readonly tick: number;
   readonly source: string;
-  readonly kind: "error" | "foreign-player";
+  readonly kind: "error" | "foreign-player" | "forbidden-command";
   readonly message: string;
 }
 
+/** Engine command types a team source may issue. Debug commands are harness-only. */
+const TEAM_COMMANDS: ReadonlySet<string> = new Set(["moveTo", "stop", "kick", "tackle", "catch", "release"]);
+
 /**
- * Drives a simulation: on each decision tick asks every source for commands,
- * filters commands for players the source doesn't own, submits the rest.
+ * Drives a simulation: on each decision tick asks every source for commands
+ * (all sources see the same pre-decision state), filters commands a team source
+ * isn't allowed to issue, and submits the rest. Each source also receives the
+ * events and the engine rejections of its own commands since its previous
+ * decision. `onMatchEnd` fires once when the match reaches full time.
  */
 export class CommandRunner {
   readonly diagnostics: SourceDiagnostic[] = [];
+  private eventCursor = new Map<CommandSource, number>();
+  private rejectCursor = new Map<CommandSource, number>();
+  private ended = false;
+
   constructor(
     readonly sim: Simulation,
     readonly sources: CommandSource[],
@@ -29,30 +39,63 @@ export class CommandRunner {
   tick(): WorldState {
     const s = this.sim.state;
     if (isDecisionTick(s.tick, this.sim.config)) {
+      const batches: EngineCommand[][] = [];
       for (const src of this.sources) {
+        const ec = this.eventCursor.get(src) ?? 0;
+        const rc = this.rejectCursor.get(src) ?? 0;
+        const events = this.sim.events.slice(ec);
+        const rejected = this.sim.rejections.slice(rc).filter((r) => {
+          const pid = (r.command as { playerId?: unknown } | null)?.playerId;
+          return src.team === "both" || (typeof pid === "string" && pid.startsWith(`${src.team}-`));
+        });
+        this.eventCursor.set(src, this.sim.events.length);
+        this.rejectCursor.set(src, this.sim.rejections.length);
         let cmds: readonly EngineCommand[] = [];
         try {
-          cmds = src.decide({ tick: s.tick, state: s });
+          cmds = src.decide({ tick: s.tick, state: s, events, rejected });
         } catch (err) {
           this.diagnostics.push({ tick: s.tick, source: src.name, kind: "error", message: String(err) });
           continue;
         }
-        const own = cmds.filter((c) => {
-          if (src.team === "both") return true; // debug/harness sources only
-          const pid = c && "playerId" in c ? c.playerId : undefined;
-          const ok = typeof pid === "string" && pid.startsWith(`${src.team}-`);
-          if (!ok) this.diagnostics.push({ tick: s.tick, source: src.name, kind: "foreign-player", message: `dropped ${String(c?.type)} command for ${String(pid ?? "world")}` });
-          return ok;
-        });
-        this.sim.submit(own);
+        batches.push(
+          cmds.filter((c) => {
+            if (src.team === "both") return true; // debug/harness sources only
+            const type = (c as { type?: unknown } | null)?.type;
+            if (!TEAM_COMMANDS.has(String(type))) {
+              this.diagnostics.push({ tick: s.tick, source: src.name, kind: "forbidden-command", message: `dropped ${String(type)} command (not allowed for team controllers)` });
+              return false;
+            }
+            const pid = c && "playerId" in c ? c.playerId : undefined;
+            const ok = typeof pid === "string" && pid.startsWith(`${src.team}-`);
+            if (!ok) this.diagnostics.push({ tick: s.tick, source: src.name, kind: "foreign-player", message: `dropped ${String(type)} command for ${String(pid ?? "world")}` });
+            return ok;
+          }),
+        );
+      }
+      // Submit only after every source has decided from the same state.
+      for (const b of batches) this.sim.submit(b);
+    }
+    const next = this.sim.tick();
+    if (!this.ended && next.match.period === "fullTime") {
+      this.ended = true;
+      for (const src of this.sources) {
+        try {
+          src.onMatchEnd?.(next);
+        } catch (err) {
+          this.diagnostics.push({ tick: next.tick, source: src.name, kind: "error", message: `onMatchEnd: ${String(err)}` });
+        }
       }
     }
-    return this.sim.tick();
+    return next;
   }
 
   run(ticks: number): WorldState {
     for (let i = 0; i < ticks; i++) this.tick();
     return this.sim.state;
+  }
+
+  dispose(): void {
+    for (const s of this.sources) s.dispose?.();
   }
 }
 
@@ -218,3 +261,4 @@ export function keyboardCommands(state: WorldState, playerId: PlayerId, keys: Ke
 
 export * from "./scenarios.ts";
 export * from "./restarts.ts";
+export * from "./sandbox.ts";

@@ -2,7 +2,9 @@ import { SCENARIOS } from "@autosoccer/controller-runtime";
 import type { LoggedEvent } from "@autosoccer/sim-core";
 import { ENGINE_VERSION, hashState } from "@autosoccer/sim-core";
 import { useEffect, useMemo, useReducer, useState } from "react";
+import { ControllerPanel } from "./ControllerPanel.tsx";
 import { ViewerEngine } from "./engine.ts";
+import { PRESETS } from "./presets.ts";
 import { PitchView } from "./PitchView.tsx";
 
 function fmtClock(sec: number): string {
@@ -54,6 +56,18 @@ export function App() {
   const [scenarioId, setScenarioId] = useState(SCENARIOS[0]!.id);
 
   useEffect(() => engine.subscribe(force), [engine]);
+  useEffect(() => {
+    // Default: two sandboxed example controllers (needs the QuickJS WASM module first).
+    const params = new URLSearchParams(location.search);
+    const blue = params.get("blue") ?? "chaser.js";
+    const red = params.get("red") ?? "zonal.js";
+    engine.init().then(() => {
+      engine.setScript("blue", { label: blue, source: PRESETS[blue] ?? PRESETS["chaser.js"]! }, false);
+      engine.setScript("red", { label: red, source: PRESETS[red] ?? PRESETS["zonal.js"]! }, false);
+      if (params.get("mode") !== "script") engine.setMode("controllers");
+      (window as unknown as { __ready: boolean }).__ready = true;
+    });
+  }, [engine]);
   useEffect(() => {
     (window as unknown as { __engine: ViewerEngine }).__engine = engine;
     const map: Record<string, keyof typeof engine.keys> = {
@@ -110,7 +124,7 @@ export function App() {
     <div className="app">
       <header>
         <h1>autosoccer-sim</h1>
-        <span className="muted">engine v{ENGINE_VERSION} · M3 match flow</span>
+        <span className="muted">engine v{ENGINE_VERSION} · M4 controller SDK + sandbox</span>
         <div className="scoreboard" data-testid="scoreboard">
           <span className="team blue">BLUE {s.match.defends.blue === "left" ? "→" : "←"}</span>
           <span className="score" data-testid="score">{s.match.score.blue} – {s.match.score.red}</span>
@@ -126,6 +140,7 @@ export function App() {
         <div className="pitch-wrap">
           {banner(s) && <div className="banner" data-testid="banner">{banner(s)}</div>}
         <PitchView state={s} events={sim.events} config={sim.config} selected={engine.selected} overlays={engine.overlays} onSelect={(id) => engine.select(id)} />
+          {engine.mode === "controllers" && <ControllerPanel engine={engine} />}
         </div>
         <aside>
           <section>
@@ -143,7 +158,8 @@ export function App() {
               </label>
             </div>
             <div className="row">
-              <label><input type="radio" checked={engine.mode === "script"} onChange={() => engine.setMode("script")} /> Script</label>
+              <label><input data-testid="mode-controllers" type="radio" checked={engine.mode === "controllers"} onChange={() => engine.setMode("controllers")} /> Controllers</label>
+              <label><input type="radio" checked={engine.mode === "script"} onChange={() => engine.setMode("script")} /> Playground</label>
               <label><input data-testid="manual" type="radio" checked={engine.mode === "manual"} onChange={() => engine.setMode("manual")} /> Manual</label>
             </div>
             <div className="row">
