@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CommandRunner, createPlaygroundScript, keyboardCommand } from "@autosoccer/controller-runtime";
+import { CommandRunner, createPlaygroundScript, keyboardCommands } from "@autosoccer/controller-runtime";
 import { runHeadless } from "@autosoccer/match-runner";
 import { createWorld, hashState, Simulation } from "@autosoccer/sim-core";
 
@@ -43,15 +43,18 @@ describe("command runner", () => {
     expect(runner.diagnostics.some((d) => d.source === "sneaky" && d.kind === "foreign-player")).toBe(true);
   });
 
-  it("keyboard helper maps keys to moveTo/stop", () => {
+  it("keyboard helper maps keys to moveTo/stop and action keys to actions", () => {
     const w = createWorld(1);
-    const none = keyboardCommand(w, "blue-4", { up: false, down: false, left: false, right: false, sprint: false });
-    expect(none).toEqual({ type: "stop", playerId: "blue-4" });
-    const right = keyboardCommand(w, "blue-4", { up: false, down: false, left: false, right: true, sprint: true });
-    expect(right?.type).toBe("moveTo");
-    if (right?.type === "moveTo") {
-      expect(right.x).toBeGreaterThan(w.players[3]!.x);
-      expect(right.sprint).toBe(true);
+    const k = { up: false, down: false, left: false, right: false, sprint: false, dribble: false };
+    expect(keyboardCommands(w, "blue-4", k)).toEqual([{ type: "stop", playerId: "blue-4" }]);
+    const [mv] = keyboardCommands(w, "blue-4", { ...k, right: true, sprint: true, dribble: true });
+    expect(mv?.type).toBe("moveTo");
+    if (mv?.type === "moveTo") {
+      expect(mv.x).toBeGreaterThan(w.players[3]!.x);
+      expect(mv.sprint).toBe(true);
+      expect(mv.dribble).toBe(true);
     }
+    const acts = keyboardCommands(w, "blue-1", k, { kick: true, tackle: true, hands: true }).map((c) => c.type);
+    expect(acts).toEqual(["stop", "kick", "tackle", "catch"]);
   });
 });

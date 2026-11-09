@@ -1,5 +1,5 @@
 import type { SimConfig } from "./config.ts";
-import type { BallState, PlayerState } from "./types.ts";
+import type { BallState, PlayerState, SimEvent } from "./types.ts";
 import { datan2, dcos, dhypot, dsin } from "./dmath.ts";
 import { clamp, wrapAngle } from "./vec.ts";
 
@@ -13,7 +13,11 @@ export interface ContactCounts {
   ballWall: number;
 }
 
-const BALL_SUBSTEPS = 4;
+/** Max ball travel per sub-step (m); well under the 0.51 m contact distance, so no tunnelling. */
+const MAX_SUBSTEP_TRAVEL = 0.1;
+const NET_RESTITUTION = 0.15;
+/** Per-tick velocity factor while the ball is inside a goal net. */
+const NET_DAMPING = 0.8;
 
 /**
  * Kinematic player model: the player turns its heading toward the target at a
@@ -27,7 +31,7 @@ export function integratePlayer(p: MutPlayer, cfg: SimConfig, dt: number): void 
   let desiredVy = 0;
   let sprinting = false;
 
-  if (p.intent.targetX !== null && p.intent.targetY !== null) {
+  if (p.stunned === 0 && p.intent.targetX !== null && p.intent.targetY !== null) {
     const dx = p.intent.targetX - p.x;
     const dy = p.intent.targetY - p.y;
     const d = dhypot(dx, dy);
@@ -134,40 +138,84 @@ export function resolvePlayerCollisions(players: MutPlayer[], cfg: SimConfig, co
 }
 
 /**
- * Advance the free ball with sub-stepping. Ball contacts with players are
- * treated as the player having effectively infinite mass (75 kg vs 0.43 kg).
- * The ball is never attached to a player.
+ * Pitch boundaries for the ball. Touchlines and the goal line outside the
+ * goal mouth are walls (out-of-play rules arrive in M3). Inside the mouth the
+ * ball may cross the goal line into the net, which is a damped box.
  */
-export function integrateBall(ball: MutBall, players: readonly MutPlayer[], cfg: SimConfig, dt: number, counts: ContactCounts): void {
-  const bc = cfg.ball;
-  const h = dt / BALL_SUBSTEPS;
-  const lx = cfg.pitch.length / 2 - bc.radius;
-  const ly = cfg.pitch.width / 2 - bc.radius;
-  const contactDist = cfg.player.radius + bc.radius;
-  const touched = new Set<number>();
+function collideBoundaries(ball: MutBall, cfg: SimConfig, counts: ContactCounts): void {
+  const r = cfg.ball.radius;
+  const e = cfg.ball.wallRestitution;
+  const halfL = cfg.pitch.length / 2;
+  const halfW = cfg.pitch.width / 2;
+  const gw2 = cfg.pitch.goalWidth / 2;
+  const back = halfL + cfg.pitch.goalDepth - r;
+  const ax = Math.abs(ball.x);
+  const sx = ball.x < 0 ? -1 : 1;
 
-  for (let s = 0; s < BALL_SUBSTEPS; s++) {
-    ball.x += ball.vx * h;
-    ball.y += ball.vy * h;
-
-    // Boundary walls (M1: the pitch is enclosed; out-of-play rules come in M3).
-    if (ball.x < -lx) {
-      ball.x = -lx + (-lx - ball.x) * bc.wallRestitution;
-      ball.vx = -ball.vx * bc.wallRestitution;
-      counts.ballWall++;
-    } else if (ball.x > lx) {
-      ball.x = lx - (ball.x - lx) * bc.wallRestitution;
-      ball.vx = -ball.vx * bc.wallRestitution;
+  if (ax > halfL) {
+    // Inside the goal net (can only get here through the mouth).
+    if (ax > back) {
+      ball.x = sx * back;
+      ball.vx = -ball.vx * NET_RESTITUTION;
       counts.ballWall++;
     }
-    if (ball.y < -ly) {
-      ball.y = -ly + (-ly - ball.y) * bc.wallRestitution;
-      ball.vy = -ball.vy * bc.wallRestitution;
+    if (Math.abs(ball.y) > gw2 - r) {
+      ball.y = (ball.y < 0 ? -1 : 1) * (gw2 - r);
+      ball.vy = -ball.vy * NET_RESTITUTION;
       counts.ballWall++;
-    } else if (ball.y > ly) {
-      ball.y = ly - (ball.y - ly) * bc.wallRestitution;
-      ball.vy = -ball.vy * bc.wallRestitution;
-      counts.ballWall++;
+    }
+    return;
+  }
+  if (ax > halfL - r && Math.abs(ball.y) > gw2 - r) {
+    // Goal line outside the mouth (incl. posts): reflect.
+    ball.x = sx * (halfL - r - (ax - (halfL - r)) * e);
+    ball.vx = -ball.vx * e;
+    counts.ballWall++;
+  }
+  const ly = halfW - r;
+  if (ball.y < -ly) {
+    ball.y = -ly + (-ly - ball.y) * e;
+    ball.vy = -ball.vy * e;
+    counts.ballWall++;
+  } else if (ball.y > ly) {
+    ball.y = ly - (ball.y - ly) * e;
+    ball.vy = -ball.vy * e;
+    counts.ballWall++;
+  }
+}
+
+/**
+ * Advance the free ball with adaptive sub-stepping (each sub-step moves at
+ * most 0.1 m, so even a 26 m/s shot can't tunnel through a player). Ball
+ * contacts with players treat the player as effectively infinite mass
+ * (75 kg vs 0.43 kg). The ball is never attached to an outfield player.
+ */
+export function integrateBall(
+  ball: MutBall,
+  players: readonly MutPlayer[],
+  cfg: SimConfig,
+  dt: number,
+  counts: ContactCounts,
+  events: SimEvent[],
+): void {
+  const bc = cfg.ball;
+  const speed0 = dhypot(ball.vx, ball.vy);
+  const n = Math.max(2, Math.min(64, Math.ceil((speed0 * dt) / MAX_SUBSTEP_TRAVEL)));
+  const h = dt / n;
+  const contactDist = cfg.player.radius + bc.radius;
+  const halfL = cfg.pitch.length / 2;
+  const gw2 = cfg.pitch.goalWidth / 2;
+  const touched = new Set<number>();
+
+  for (let s = 0; s < n; s++) {
+    ball.x += ball.vx * h;
+    ball.y += ball.vy * h;
+    collideBoundaries(ball, cfg, counts);
+
+    // Goal: the whole ball has crossed the goal line between the posts.
+    if (ball.inGoal === null && Math.abs(ball.x) > halfL + bc.radius && Math.abs(ball.y) < gw2) {
+      ball.inGoal = ball.x < 0 ? "left" : "right";
+      events.push({ type: "goal", side: ball.inGoal });
     }
 
     for (let i = 0; i < players.length; i++) {
@@ -191,10 +239,17 @@ export function integrateBall(ball: MutBall, players: readonly MutPlayer[], cfg:
         ball.vx -= (1 + bc.playerRestitution) * vn * nx;
         ball.vy -= (1 + bc.playerRestitution) * vn * ny;
       }
+      ball.lastTouch = p.id;
       touched.add(i);
     }
   }
   counts.playerBall += touched.size;
+
+  // The net absorbs the ball: heavy damping once it is behind the goal line.
+  if (Math.abs(ball.x) > halfL) {
+    ball.vx *= NET_DAMPING;
+    ball.vy *= NET_DAMPING;
+  }
 
   // Rolling friction + linear drag, applied once per tick.
   const speed = dhypot(ball.vx, ball.vy);

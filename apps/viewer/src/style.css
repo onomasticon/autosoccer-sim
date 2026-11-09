@@ -24,3 +24,9 @@ input, select { background: #0d1117; color: #e6edf3; border: 1px solid #30363d; 
 .muted { color: #8b98a5; }
 .ok { margin-top: 8px; color: #3fb950; font-weight: 700; }
 .bad { margin-top: 8px; color: #f85149; font-weight: 700; }
+.scenario { background: #2b3440; padding: 6px 8px; border-radius: 6px; margin-top: 4px; }
+.log { font-size: 12px; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.log.rejected { color: #ff7b72; }
+.log.goal { color: #ffeb3b; font-weight: 700; }
+.log .mono { color: #8b98a5; }
+aside { width: 360px; }

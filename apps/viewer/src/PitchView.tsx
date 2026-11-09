@@ -1,4 +1,5 @@
-import type { PlayerId, SimConfig, WorldState } from "@autosoccer/sim-core";
+import type { LoggedEvent, PlayerId, SimConfig, WorldState } from "@autosoccer/sim-core";
+import { defendedSide } from "@autosoccer/sim-core";
 import { Application, Container, Graphics, Text } from "pixi.js";
 import { useEffect, useRef } from "react";
 
@@ -21,6 +22,7 @@ const COLORS = {
 
 interface Props {
   state: WorldState;
+  events: readonly LoggedEvent[];
   config: SimConfig;
   selected: PlayerId | null;
   overlays: boolean;
@@ -65,11 +67,11 @@ function drawPitch(g: Graphics, cfg: SimConfig): void {
   }
 }
 
-export function PitchView({ state, config, selected, overlays, onSelect }: Props) {
+export function PitchView({ state, events, config, selected, overlays, onSelect }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const appRef = useRef<{ app: Application; dyn: Graphics; labels: Container; texts: Map<string, Text> } | null>(null);
-  const propsRef = useRef<Props>({ state, config, selected, overlays, onSelect });
-  propsRef.current = { state, config, selected, overlays, onSelect };
+  const propsRef = useRef<Props>({ state, events, config, selected, overlays, onSelect });
+  propsRef.current = { state, events, config, selected, overlays, onSelect };
 
   useEffect(() => {
     let destroyed = false;
@@ -121,13 +123,44 @@ export function PitchView({ state, config, selected, overlays, onSelect }: Props
   function render() {
     const r = appRef.current;
     if (!r) return;
-    const { state: s, config: c, selected: selId, overlays: ov } = propsRef.current;
+    const { state: s, events: evs, config: c, selected: selId, overlays: ov } = propsRef.current;
     const p = toPx(c);
     const g = r.dyn;
     g.clear();
     const pr = c.player.radius * PX_PER_M;
 
+    // Goal flash.
+    if (s.ball.inGoal) {
+      const side = s.ball.inGoal === "left" ? -1 : 1;
+      const [gx, gy] = p(side < 0 ? -c.pitch.length / 2 - c.pitch.goalDepth : c.pitch.length / 2, -c.pitch.goalWidth / 2);
+      g.rect(gx, gy, c.pitch.goalDepth * PX_PER_M, c.pitch.goalWidth * PX_PER_M).fill({ color: 0xffeb3b, alpha: 0.75 });
+    }
+
     if (ov) {
+      // Contact ranges + legal keeper area for the selected player.
+      const sp = s.players.find((q) => q.id === selId);
+      if (sp) {
+        const [sx, sy] = p(sp.x, sp.y);
+        g.circle(sx, sy, c.action.kickRange * PX_PER_M).stroke({ width: 1.5, color: 0xffffff, alpha: 0.7 });
+        g.circle(sx, sy, c.action.tackleReach * PX_PER_M).stroke({ width: 1.5, color: 0xff9800, alpha: 0.7 });
+        if (sp.role === "GK") {
+          g.circle(sx, sy, c.action.catchReach * PX_PER_M).stroke({ width: 1.5, color: COLORS.gk, alpha: 0.9 });
+          const left = defendedSide(sp.team) === "left";
+          const [ax, ay] = p(left ? -c.pitch.length / 2 : c.pitch.length / 2 - c.pitch.penaltyAreaDepth, -c.pitch.penaltyAreaWidth / 2);
+          g.rect(ax, ay, c.pitch.penaltyAreaDepth * PX_PER_M, c.pitch.penaltyAreaWidth * PX_PER_M).fill({ color: COLORS.gk, alpha: 0.12 });
+        }
+      }
+      // Kick / release vectors for 0.75 s after they happen.
+      for (const le of evs.slice(-30)) {
+        if (s.tick - le.tick > 45) continue;
+        if (le.event.type === "kick") {
+          const e = le.event;
+          const [x0, y0] = p(le.ballX, le.ballY);
+          const [x1, y1] = p(le.ballX + e.dirX * e.speed * 0.3, le.ballY + e.dirY * e.speed * 0.3);
+          g.moveTo(x0, y0).lineTo(x1, y1).stroke({ width: 3, color: 0xff4081, alpha: 0.9 });
+          g.circle(x1, y1, 4).fill(0xff4081);
+        }
+      }
       for (const pl of s.players) {
         const [x, y] = p(pl.x, pl.y);
         if (pl.intent.targetX !== null && pl.intent.targetY !== null) {
@@ -149,7 +182,10 @@ export function PitchView({ state, config, selected, overlays, onSelect }: Props
       const color = pl.team === "blue" ? COLORS.blue : COLORS.red;
       if (pl.id === selId) g.circle(x, y, pr + 5).stroke({ width: 3, color: COLORS.select });
       // Collision circle at true radius, plus a heading tick.
-      g.circle(x, y, pr).fill(color).stroke({ width: pl.role === "GK" ? 3 : 1.5, color: pl.role === "GK" ? COLORS.gk : 0x000000 });
+      g.circle(x, y, pr).fill({ color, alpha: pl.stunned > 0 ? 0.4 : 1 }).stroke({ width: pl.role === "GK" ? 3 : 1.5, color: pl.role === "GK" ? COLORS.gk : 0x000000 });
+      if (pl.stunned > 0) {
+        g.moveTo(x - pr, y - pr).lineTo(x + pr, y + pr).moveTo(x + pr, y - pr).lineTo(x - pr, y + pr).stroke({ width: 2, color: 0xffffff });
+      }
       g.moveTo(x, y)
         .lineTo(x + Math.cos(pl.heading) * (pr + 4), y + Math.sin(pl.heading) * (pr + 4))
         .stroke({ width: 2, color: 0xffffff });
@@ -170,6 +206,7 @@ export function PitchView({ state, config, selected, overlays, onSelect }: Props
     const [bx, by] = p(s.ball.x, s.ball.y);
     // True ball radius is 2 px at this scale; draw a 5 px marker so it stays visible.
     g.circle(bx, by, Math.max(5, c.ball.radius * PX_PER_M)).fill(COLORS.ball).stroke({ width: 1.5, color: 0x000000 });
+    if (s.ball.heldBy) g.circle(bx, by, 8).stroke({ width: 2, color: COLORS.gk });
   }
 
   useEffect(() => {
