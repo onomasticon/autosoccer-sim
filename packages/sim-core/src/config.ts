@@ -61,6 +61,40 @@ export interface BallPhysicsConfig {
   playerRestitution: number;
 }
 
+/** Ball-action rules (M2). Distances are measured centre-to-centre. */
+export interface ActionConfig {
+  /** Max player→ball distance for a kick / dribble touch / trap. */
+  kickRange: number;
+  /** Kicks must be within this angle (rad) of the player's heading. */
+  kickMaxAngle: number;
+  minKickSpeed: number;
+  maxKickSpeed: number;
+  /** Std-dev-like max angular error (rad) at full power and zero stamina. */
+  kickErrorMax: number;
+  /** Ticks before the same player can touch the ball again after a kick. */
+  kickCooldownTicks: number;
+  /** Dribble touches: distance window and resulting ball speed above player speed. */
+  dribbleRange: number;
+  dribbleTouchBoost: number;
+  dribbleCooldownTicks: number;
+  /** Incoming balls faster than this (relative) can't be trapped. */
+  trapMaxSpeed: number;
+  /** Relative speed above which a ball counts as "incoming" for trapping. */
+  trapMinSpeed: number;
+  trapCooldownTicks: number;
+  tackleReach: number;
+  tackleCooldownTicks: number;
+  /** Ticks a player is grounded after a failed tackle. */
+  tackleFailStunTicks: number;
+  tackleKnockSpeed: number;
+  catchReach: number;
+  catchMaxSpeed: number;
+  catchCooldownTicks: number;
+  /** Keeper must release within this many ticks or the ball is dropped. */
+  maxHoldTicks: number;
+  maxReleaseSpeed: number;
+}
+
 export interface SimConfig {
   /** Physics steps per second (fixed). */
   tickRate: number;
@@ -72,6 +106,7 @@ export interface SimConfig {
   pitch: PitchConfig;
   player: PlayerPhysicsConfig;
   ball: BallPhysicsConfig;
+  action: ActionConfig;
   /** Max random offset (m) applied to kickoff formation positions from the seed. */
   formationJitter: number;
 }
@@ -115,6 +150,29 @@ export const DEFAULT_CONFIG: SimConfig = Object.freeze({
     wallRestitution: 0.6,
     playerRestitution: 0.55,
   }),
+  action: Object.freeze({
+    kickRange: 0.85,
+    kickMaxAngle: (110 * Math.PI) / 180,
+    minKickSpeed: 4,
+    maxKickSpeed: 26,
+    kickErrorMax: 0.12,
+    kickCooldownTicks: 12,
+    dribbleRange: 0.9,
+    dribbleTouchBoost: 0.9,
+    dribbleCooldownTicks: 10,
+    trapMaxSpeed: 22,
+    trapMinSpeed: 1.5,
+    trapCooldownTicks: 10,
+    tackleReach: 1.3,
+    tackleCooldownTicks: 45,
+    tackleFailStunTicks: 36,
+    tackleKnockSpeed: 7,
+    catchReach: 1.4,
+    catchMaxSpeed: 28,
+    catchCooldownTicks: 30,
+    maxHoldTicks: 360,
+    maxReleaseSpeed: 22,
+  }),
   formationJitter: 0.6,
 }) as SimConfig;
 
@@ -129,6 +187,7 @@ export function makeConfig(overrides: ConfigOverrides = {}): SimConfig {
     pitch: { ...DEFAULT_CONFIG.pitch, ...overrides.pitch },
     player: { ...DEFAULT_CONFIG.player, ...overrides.player },
     ball: { ...DEFAULT_CONFIG.ball, ...overrides.ball },
+    action: { ...DEFAULT_CONFIG.action, ...overrides.action },
   };
   validateConfig(cfg);
   return cfg;
