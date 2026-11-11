@@ -1,6 +1,6 @@
 # autosoccer-sim
 
-A deterministic 5v5 2D soccer simulator for scriptable team controllers: a headless TypeScript
+A deterministic 5v5 (and 7v7) 2D soccer simulator for scriptable team controllers: a headless TypeScript
 engine, sandboxed JavaScript controllers, and a React + PixiJS viewer with replays. It's built so
 that new controllers, including LLM-generated ones, can be written from the public docs alone.
 

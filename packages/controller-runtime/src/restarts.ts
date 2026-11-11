@@ -4,7 +4,7 @@
  */
 import type { CommandSource } from "@autosoccer/controller-sdk";
 import type { EngineCommand, PlayerState, SimConfig, TeamId, WorldState } from "@autosoccer/sim-core";
-import { attackSign, dcos, DEFAULT_CONFIG, dhypot, dsin, FORMATION, formationSpot, inOwnPenaltyArea, isRestartPhase, Rng } from "@autosoccer/sim-core";
+import { attackSign, dcos, DEFAULT_CONFIG, dhypot, dsin, formationFor, formationSpot, inOwnPenaltyArea, isRestartPhase, Rng } from "@autosoccer/sim-core";
 
 /** Best simple target for a restart: nearest outfield teammate at least 3 m away, else up the pitch. */
 function restartTarget(state: WorldState, taker: PlayerState, cfg: SimConfig): { x: number; y: number } {
@@ -129,7 +129,7 @@ export function createSafeController(team: TeamId, cfg: SimConfig = DEFAULT_CONF
             out.push(...(p.touchCooldown > 0 ? cmds.filter((c) => c.type !== "kick") : cmds));
             continue;
           }
-          const slot = FORMATION.findIndex((f) => f.number === p.number);
+          const slot = formationFor(cfg).findIndex((f) => f.number === p.number);
           const home = formationSpot(slot, side, cfg);
           out.push({ type: "moveTo", playerId: p.id, x: home.x + ball.x * 0.3, y: home.y + ball.y * 0.2 });
         }

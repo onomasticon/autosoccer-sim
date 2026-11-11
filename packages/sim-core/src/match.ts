@@ -14,7 +14,7 @@ import { datan2, dcos, dhypot, dsin } from "./dmath.ts";
 import type { MutBall, MutPlayer } from "./physics.ts";
 import type { MatchState, Period, Phase, PlayerId, Restart, RestartType, SimEvent, TeamId } from "./types.ts";
 import { clamp } from "./vec.ts";
-import { attackSign, defendedSide, FORMATION, formationSpot, otherTeam } from "./world.ts";
+import { attackSign, defendedSide, formationFor, formationSpot, otherTeam } from "./world.ts";
 
 export type MutMatch = { -readonly [K in keyof MatchState]: MatchState[K] };
 
@@ -176,7 +176,7 @@ function award(ctx: MatchContext, type: Exclude<RestartType, "kickoff">, team: T
 function setupKickoff(ctx: MatchContext, team: TeamId): void {
   const { match: m, players, ball, cfg, tick, events } = ctx;
   for (const p of players) {
-    const slot = FORMATION.findIndex((s) => s.number === p.number);
+    const slot = formationFor(cfg).findIndex((s) => s.number === p.number);
     const side = defendedSide(p.team, m);
     const spot = formationSpot(slot, side, cfg);
     const facing = attackSign(p.team, m);

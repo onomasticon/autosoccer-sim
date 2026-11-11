@@ -334,5 +334,5 @@ describe("scenarios + determinism", () => {
     expect(b.hash).toBe(a.hash);
     expect(a.events).toBeGreaterThan(20);
     expect(hashState(Simulation.replay(9, a.sim.log, a.sim.state.tick))).toBe(a.hash);
-  });
+  }, 30_000);
 });

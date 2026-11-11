@@ -212,6 +212,27 @@ export const DEFAULT_CONFIG: SimConfig = Object.freeze({
   formationJitter: 0.6,
 }) as SimConfig;
 
+/** Team sizes the engine has formations for. */
+export const SUPPORTED_TEAM_SIZES = [5, 7] as const;
+export type TeamSize = (typeof SUPPORTED_TEAM_SIZES)[number];
+
+/**
+ * Overrides for 7-a-side: a longer, wider pitch with a bigger goal and box, so
+ * the extra players get roughly the same space per player as in 5v5
+ * (50×32 m / 10 players ≈ 160 m²; 60×38 m / 14 players ≈ 163 m²).
+ */
+export const SEVEN_A_SIDE: ConfigOverrides = Object.freeze({
+  playersPerTeam: 7,
+  pitch: Object.freeze({
+    length: 60,
+    width: 38,
+    goalWidth: 5,
+    penaltyAreaDepth: 8,
+    penaltyAreaWidth: 18,
+    centreCircleRadius: 5,
+  }),
+}) as ConfigOverrides;
+
 export type ConfigOverrides = {
   [K in keyof SimConfig]?: SimConfig[K] extends object ? Partial<SimConfig[K]> : SimConfig[K];
 };
@@ -234,7 +255,8 @@ export function validateConfig(cfg: SimConfig): void {
   if (!Number.isInteger(cfg.tickRate) || cfg.tickRate <= 0) throw new Error("tickRate must be a positive integer");
   if (!Number.isInteger(cfg.controllerRate) || cfg.controllerRate <= 0) throw new Error("controllerRate must be a positive integer");
   if (cfg.tickRate % cfg.controllerRate !== 0) throw new Error("controllerRate must divide tickRate");
-  if (cfg.playersPerTeam !== 5) throw new Error("Only 5v5 is supported");
+  if (!SUPPORTED_TEAM_SIZES.includes(cfg.playersPerTeam as TeamSize))
+    throw new Error(`playersPerTeam must be one of ${SUPPORTED_TEAM_SIZES.join(", ")}`);
   if (cfg.halfDurationSec <= 0) throw new Error("match duration must be positive");
   if (cfg.halves !== 2) throw new Error("matches have exactly two halves");
 }

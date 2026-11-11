@@ -9,7 +9,7 @@ deterministic on every host.
 **1.1** adds two things and changes nothing else: the built-in `Soccer` helper library, and an
 optional `debug` decision trace returned from `update`.
 
-A controller is a plain JavaScript file that drives one team's five players through this API. It
+A controller is a plain JavaScript file that drives one team's players (five, or seven in 7-a-side) through this API. It
 runs in a sandbox. Everything it sees is JSON built from the world state, and everything it returns
 is validated before the engine executes it.
 

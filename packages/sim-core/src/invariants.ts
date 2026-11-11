@@ -16,7 +16,8 @@ export function checkInvariants(s: WorldState, cfg: SimConfig = DEFAULT_CONFIG):
   const run = cfg.pitch.runOff;
   const finite = (v: number) => Number.isFinite(v);
 
-  if (s.players.length !== 10) out.push(`expected 10 players, got ${s.players.length}`);
+  const expected = cfg.playersPerTeam * 2;
+  if (s.players.length !== expected) out.push(`expected ${expected} players, got ${s.players.length}`);
   for (const p of s.players) {
     for (const [k, v] of Object.entries({ x: p.x, y: p.y, vx: p.vx, vy: p.vy, heading: p.heading, stamina: p.stamina })) if (!finite(v)) out.push(`${p.id}.${k} not finite`);
     if (Math.abs(p.x) > halfL + run + 1e-6 || Math.abs(p.y) > halfW + run + 1e-6) out.push(`${p.id} outside the world (${p.x.toFixed(2)}, ${p.y.toFixed(2)})`);

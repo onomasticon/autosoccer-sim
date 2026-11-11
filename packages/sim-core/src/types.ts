@@ -3,8 +3,8 @@ import type { RngState } from "./prng.ts";
 export type TeamId = "blue" | "red";
 export type Role = "GK" | "DF" | "MF" | "FW";
 
-/** Stable entity IDs: "blue-1".."blue-5", "red-1".."red-5", and "ball". */
-export type PlayerId = `${TeamId}-${1 | 2 | 3 | 4 | 5}`;
+/** Stable entity IDs: "blue-1".."blue-N", "red-1".."red-N" (N = playersPerTeam, 5 or 7), and "ball". */
+export type PlayerId = `${TeamId}-${1 | 2 | 3 | 4 | 5 | 6 | 7}`;
 
 /** A player's current movement intent, set by (validated) commands. */
 export interface PlayerIntent {

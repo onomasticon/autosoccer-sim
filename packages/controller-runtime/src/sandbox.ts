@@ -190,6 +190,9 @@ export class SandboxedController implements CommandSource {
     });
     this.ctx = this.rt.newContext();
     this.evalOrFail(BOOTSTRAP, "bootstrap", this.limits.opsInitialize);
+    const pg = this.cfg.pitch;
+    const pitch = { length: pg.length, width: pg.width, goalWidth: pg.goalWidth, penaltyAreaDepth: pg.penaltyAreaDepth, penaltyAreaWidth: pg.penaltyAreaWidth };
+    if (this.loadError === null) this.evalOrFail(`globalThis.__SOCCER_PITCH__ = Object.freeze(${JSON.stringify(pitch)});`, "pitch", this.limits.opsInitialize);
     if (this.loadError === null) this.evalOrFail(HELPERS_SOURCE, "soccer-helpers", this.limits.opsInitialize);
     if (this.loadError === null) this.evalOrFail(opts.source, this.label, this.limits.opsInitialize);
     if (this.loadError === null) {
