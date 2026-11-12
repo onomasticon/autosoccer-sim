@@ -58,6 +58,15 @@ describe("7-a-side", () => {
       expect(summary.deterministic).toBe(true);
       expect(summary.replayVerified).toBe(true);
       expect(replay!.config.playersPerTeam).toBe(7);
+      // Every player takes part: no engine rejections, and shirts 6 and 7 leave their kickoff spots.
+      expect(replay!.engineRejections.filter((r) => /invalid playerId|unknown player/.test(r.reason))).toEqual([]);
+      const start = createWorld(seed, makeConfig({ ...SEVEN_A_SIDE, halfDurationSec: 45 }));
+      const end = replay!.snapshots.at(-1)!.state;
+      for (const id of ["blue-6", "blue-7", "red-6", "red-7"]) {
+        const a = start.players.find((p) => p.id === id)!;
+        const b = end.players.find((p) => p.id === id)!;
+        expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(1);
+      }
       expect(new ReplayPlayer(JSON.parse(JSON.stringify(replay))).verify().ok).toBe(true);
     }
   }, 60_000);

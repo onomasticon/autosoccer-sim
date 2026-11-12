@@ -28,7 +28,8 @@ export interface CommandRejection {
   readonly reason: string;
 }
 
-const PLAYER_ID_RE = /^(blue|red)-[1-5]$/;
+// Any shirt 1–9; whether the player exists in this match (5- or 7-a-side) is checked when the command is applied.
+const PLAYER_ID_RE = /^(blue|red)-[1-9]$/;
 
 export function isPlayerId(v: unknown): v is PlayerId {
   return typeof v === "string" && PLAYER_ID_RE.test(v);
