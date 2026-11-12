@@ -7,7 +7,7 @@ Blue defends −x at kickoff. All values live in `DEFAULT_CONFIG` (`packages/sim
 | --- | --- |
 | Pitch | 50 × 32 m, goals 4 m wide, keeper area 6 × 14 m, 2 m run-off |
 | Timing | 60 Hz physics, 10 Hz decisions (6 ticks), 2 × 120 s halves (configurable) |
-| Teams | 5v5, shirt 1 = goalkeeper; IDs `blue-1..5`, `red-1..5` |
+| Teams | 5v5 by default, or 7v7 with `SEVEN_A_SIDE` (60×38 m pitch, 5 m goal, 8×18 m box); shirt 1 = goalkeeper; IDs `blue-1..N`, `red-1..N` |
 
 ## Players
 

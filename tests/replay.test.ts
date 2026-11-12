@@ -23,7 +23,7 @@ async function recorded(): Promise<ReplayFile> {
 describe("replay recording + playback", () => {
   it("records versions, seed, config, controller identities, commands, events, decisions, snapshots and hashes", async () => {
     const r = await recorded();
-    expect(r).toMatchObject({ format: "autosoccer-replay", formatVersion: 1, engineVersion: "0.3.0", sdkVersion: "1.2.0", result: { period: "fullTime" } });
+    expect(r).toMatchObject({ format: "autosoccer-replay", formatVersion: 1, engineVersion: "0.4.0", sdkVersion: "1.3.0", result: { period: "fullTime" } });
     expect(r.controllers.blue).toMatchObject({ name: "blue-possession", version: "1.0.0", label: "blue-possession.js" });
     expect(r.controllers.red!.sourceHash).toMatch(/^[0-9a-f]{8}$/);
     expect(r.snapshots[0]!.tick).toBe(0);

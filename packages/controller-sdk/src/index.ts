@@ -5,6 +5,7 @@
  *   SDK_VERSION 1.1.0 · observation schema "1.0" · action schema "1.0"
  *   1.1: `Soccer` helper library in the sandbox; optional `debug` output from update.
  *   1.2: observation numbers rounded to 4 decimals (performance; shape unchanged).
+ *   1.3: 7-a-side support: shirt refs up to the team size; `Soccer` helpers use the match pitch (`Soccer.pitch`).
  *
  * Controllers see only plain JSON observations (built here from the world
  * state; no engine references) and return plain JSON actions, which are
@@ -14,7 +15,7 @@
 import type { EngineCommand, LoggedEvent, Period, Phase, PlayerId, RestartType, Role, SimConfig, SimEvent, TeamId, WorldState } from "@autosoccer/sim-core";
 import { attackSign, DEFAULT_CONFIG, ENGINE_VERSION } from "@autosoccer/sim-core";
 
-export const SDK_VERSION = "1.2.0";
+export const SDK_VERSION = "1.3.0";
 /** Observation numbers are rounded to this many decimals (0.1 mm, 0.1 mm/s, 1e-4 rad). SDK ≥ 1.2. */
 export const OBSERVATION_DECIMALS = 4;
 
@@ -72,7 +73,7 @@ export interface Observation {
   clock: { half: 1 | 2; secondsInHalf: number; halfDurationSec: number };
   score: { own: number; opponent: number; blue: number; red: number };
   ball: { x: number; y: number; vx: number; vy: number; heldBy: PlayerId | null; lastTouch: PlayerId | null };
-  /** Your five players (including the goalkeeper), in ID order. */
+  /** Your players (5 or 7, including the goalkeeper), in ID order. */
   teammates: OwnPlayerView[];
   opponents: PlayerView[];
   /** Pending restart, if any. Only `taker` may play it, by kicking once `ready`. */
@@ -332,10 +333,14 @@ export interface TranslatedActions {
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 const isVec = (v: unknown): v is Vec => typeof v === "object" && v !== null && finite((v as Vec).x) && finite((v as Vec).y);
 
-function resolvePlayer(ref: unknown, team: TeamId): PlayerId | string {
-  if (typeof ref === "number" && Number.isInteger(ref) && ref >= 1 && ref <= 5) return `${team}-${ref}` as PlayerId;
-  if (typeof ref === "string" && /^(blue|red)-[1-5]$/.test(ref)) {
-    if (!ref.startsWith(`${team}-`)) return `not your player: ${ref}`;
+const PLAYER_REF = /^(blue|red)-([1-9])$/;
+
+/** Resolves a shirt number or ID to one of this team's players; anything else is a rejection reason. */
+function resolvePlayer(ref: unknown, team: TeamId, teamSize: number): PlayerId | string {
+  if (typeof ref === "number" && Number.isInteger(ref) && ref >= 1 && ref <= teamSize) return `${team}-${ref}` as PlayerId;
+  const m = typeof ref === "string" ? PLAYER_REF.exec(ref) : null;
+  if (m && Number(m[2]) <= teamSize) {
+    if (m[1] !== team) return `not your player: ${ref}`;
     return ref as PlayerId;
   }
   return `invalid player reference: ${JSON.stringify(ref)}`;
@@ -363,6 +368,7 @@ export function translateActions(output: unknown, team: TeamId, state: WorldStat
     list = list.slice(0, MAX_ACTIONS_PER_UPDATE);
   }
 
+  const teamSize = state.players.filter((p) => p.team === team).length;
   const movement = new Map<PlayerId, { cmd: EngineCommand; i: number }>();
   const sprintMod = new Map<PlayerId, boolean>();
   const ball = new Map<PlayerId, { cmd: EngineCommand; i: number }>();
@@ -371,8 +377,8 @@ export function translateActions(output: unknown, team: TeamId, state: WorldStat
     if (typeof a !== "object" || a === null) return rejected.push({ action: a, reason: "action must be an object" });
     const act = a as Record<string, unknown>;
     if (!ACTION_TYPES.includes(act.type as (typeof ACTION_TYPES)[number])) return rejected.push({ action: a, reason: `unknown action type: ${String(act.type)}` });
-    const pid = resolvePlayer(act.player, team);
-    if (!/^(blue|red)-[1-5]$/.test(pid)) return rejected.push({ action: a, reason: pid });
+    const pid = resolvePlayer(act.player, team, teamSize);
+    if (!PLAYER_REF.test(pid)) return rejected.push({ action: a, reason: pid });
     const id = pid as PlayerId;
     const ballAction = (cmd: EngineCommand) => {
       if (ball.has(id)) return rejected.push({ action: a, reason: `only one ball action per player per update (${id})` });

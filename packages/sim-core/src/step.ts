@@ -129,7 +129,9 @@ function applyDebug(c: DebugCommand, players: MutPlayer[], ball: MutBall, match:
     Object.assign(ball, { x: c.x, y: c.y, vx: c.vx ?? 0, vy: c.vy ?? 0, heldBy: null, holdTicks: 0, inGoal: null, lastTouch: null });
     return;
   }
-  const p = players[index.get(c.playerId)!]!;
+  const i = index.get(c.playerId);
+  if (i === undefined) return; // e.g. shirt 6 in a 5-a-side match
+  const p = players[i]!;
   if (ball.heldBy === p.id) Object.assign(ball, { heldBy: null, holdTicks: 0 });
   Object.assign(p, {
     x: c.x,

@@ -9,7 +9,12 @@ export const HELPERS_SOURCE = String.raw`
   "use strict";
   // Engine ball friction (see docs/simulation.md): dv/dt = -(A + B v).
   const A = 0.9, B = 0.25;
+  // Pitch geometry; the sandbox sets __SOCCER_PITCH__ from the match config (defaults: 5-a-side).
+  const PITCH = globalThis.__SOCCER_PITCH__ || { length: 50, width: 32, goalWidth: 4, penaltyAreaDepth: 6, penaltyAreaWidth: 14 };
+  const HL = PITCH.length / 2, HW = PITCH.width / 2;
+  const BOX_DEPTH = PITCH.penaltyAreaDepth, BOX_HALF = PITCH.penaltyAreaWidth / 2;
   const S = {};
+  S.pitch = Object.freeze({ ...PITCH });
 
   S.len = (x, y) => Math.hypot(x, y);
   S.dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -18,12 +23,12 @@ export const HELPERS_SOURCE = String.raw`
   S.norm = (x, y) => { const l = Math.hypot(x, y) || 1; return { x: x / l, y: y / l }; };
 
   /** Goal centres for the observing team this half. */
-  S.oppGoal = (obs) => ({ x: obs.attackingDirection * 25, y: 0 });
-  S.ownGoal = (obs) => ({ x: -obs.attackingDirection * 25, y: 0 });
+  S.oppGoal = (obs) => ({ x: obs.attackingDirection * HL, y: 0 });
+  S.ownGoal = (obs) => ({ x: -obs.attackingDirection * HL, y: 0 });
   /** Distance "up the pitch" for the observing team: + is toward the opponents' goal. */
   S.forward = (obs, p) => p.x * obs.attackingDirection;
-  S.inOwnBox = (obs, p) => -S.forward(obs, p) > 25 - 6 && Math.abs(p.y) < 7;
-  S.inOppBox = (obs, p) => S.forward(obs, p) > 25 - 6 && Math.abs(p.y) < 7;
+  S.inOwnBox = (obs, p) => -S.forward(obs, p) > HL - BOX_DEPTH && Math.abs(p.y) < BOX_HALF;
+  S.inOppBox = (obs, p) => S.forward(obs, p) > HL - BOX_DEPTH && Math.abs(p.y) < BOX_HALF;
 
   /** Where a free-rolling ball will be after t seconds (ignores collisions). */
   S.ballAt = (ball, t) => {
@@ -81,7 +86,7 @@ export const HELPERS_SOURCE = String.raw`
         x += ux * s;
         y += uy * s;
       }
-      if (Math.abs(x) > 25.5 || Math.abs(y) > 16.5) return null;
+      if (Math.abs(x) > HL + 0.5 || Math.abs(y) > HW + 0.5) return null;
       const d = Math.hypot(x - p.x, y - p.y);
       // Quick reject before the turn-penalty estimate.
       if (d / rules.sprintSpeed > t + 0.05) continue;
@@ -153,10 +158,10 @@ export const HELPERS_SOURCE = String.raw`
 
   /** A target inside the opponents' goal, toward the side away from their keeper. */
   S.shotTarget = (obs) => {
-    const gx = obs.attackingDirection * 25.3;
+    const gx = obs.attackingDirection * (HL + 0.3);
     const gk = obs.opponents.find((p) => p.role === "GK");
     const side = gk && gk.y > 0 ? -1 : 1;
-    return { x: gx, y: side * 1.4 };
+    return { x: gx, y: side * (PITCH.goalWidth / 2 - 0.6) };
   };
 
   /** Our pending restart's taker (object) or null. */

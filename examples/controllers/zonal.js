@@ -2,7 +2,8 @@
 // player engages, and wins the ball by intercepting; passes forward to the
 // most advanced teammate.
 const R = { kickRange: 0.85 };
-const SHAPE = { 2: [-10, -5], 3: [-10, 5], 4: [-3, 0], 5: [4, 3] };
+// 6 and 7 are only used in 7-a-side.
+const SHAPE = { 2: [-10, -5], 3: [-10, 5], 4: [-3, 0], 5: [4, 3], 6: [-3, -9], 7: [-3, 9] };
 function behind(p, bx, by, dx, dy) {
   const l = Math.hypot(dx, dy) || 1; dx /= l; dy /= l;
   const along = (p.x - bx) * dx + (p.y - by) * dy;
