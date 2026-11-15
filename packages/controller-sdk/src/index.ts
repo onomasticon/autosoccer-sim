@@ -7,16 +7,17 @@
  *   1.2: observation numbers rounded to 4 decimals (performance; shape unchanged).
  *   1.3: 7-a-side support: shirt refs up to the team size; `Soccer` helpers use the match pitch (`Soccer.pitch`).
  *   1.4: 11-a-side support (shirt refs up to 11); `rules.dribbleRange` and `rules.controlChance` (ball control).
+ *   1.5: `info.players[].attributes` when the match has player attributes.
  *
  * Controllers see only plain JSON observations (built here from the world
  * state; no engine references) and return plain JSON actions, which are
  * validated here and translated into engine commands for their own players
  * only. See docs/controller-sdk.md for the full reference.
  */
-import type { EngineCommand, LoggedEvent, Period, Phase, PlayerId, RestartType, Role, SimConfig, SimEvent, TeamId, WorldState } from "@autosoccer/sim-core";
+import type { EngineCommand, LoggedEvent, Period, Phase, PlayerAttributes, PlayerId, RestartType, Role, SimConfig, SimEvent, TeamId, WorldState } from "@autosoccer/sim-core";
 import { attackSign, DEFAULT_CONFIG, ENGINE_VERSION } from "@autosoccer/sim-core";
 
-export const SDK_VERSION = "1.4.0";
+export const SDK_VERSION = "1.5.0";
 /** Observation numbers are rounded to this many decimals (0.1 mm, 0.1 mm/s, 1e-4 rad). SDK ≥ 1.2. */
 export const OBSERVATION_DECIMALS = 4;
 
@@ -101,7 +102,8 @@ export interface MatchInfo {
   engineVersion: string;
   team: TeamId;
   seed: number;
-  players: Array<{ id: PlayerId; number: number; role: Role }>;
+  /** Own players; `attributes` (ratings 1–99) when the match has player attributes (SDK 1.5). */
+  players: Array<{ id: PlayerId; number: number; role: Role; attributes?: PlayerAttributes }>;
   pitch: { length: number; width: number; goalWidth: number; penaltyAreaDepth: number; penaltyAreaWidth: number };
   timing: { tickRate: number; decisionRate: number; halfDurationSec: number };
   /** Physical limits the engine enforces; use them to avoid rejected actions. */
@@ -234,7 +236,9 @@ export function buildMatchInfo(state: WorldState, team: TeamId, cfg: SimConfig =
     engineVersion: ENGINE_VERSION,
     team,
     seed: state.seed,
-    players: state.players.filter((p) => p.team === team).map((p) => ({ id: p.id, number: p.number, role: p.role })),
+    players: state.players
+      .filter((p) => p.team === team)
+      .map((p) => ({ id: p.id, number: p.number, role: p.role, ...(cfg.players?.[p.id] ? { attributes: cfg.players[p.id] } : {}) })),
     pitch: { length: cfg.pitch.length, width: cfg.pitch.width, goalWidth: cfg.pitch.goalWidth, penaltyAreaDepth: cfg.pitch.penaltyAreaDepth, penaltyAreaWidth: cfg.pitch.penaltyAreaWidth },
     timing: { tickRate: cfg.tickRate, decisionRate: cfg.controllerRate, halfDurationSec: cfg.halfDurationSec },
     rules: {

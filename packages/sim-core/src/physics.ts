@@ -2,6 +2,7 @@ import type { SimConfig } from "./config.ts";
 import type { BallState, PlayerState, SimEvent } from "./types.ts";
 import { datan2, dcos, dhypot, dsin } from "./dmath.ts";
 import { clamp, wrapAngle } from "./vec.ts";
+import { playerPhysics } from "./attributes.ts";
 
 /** Mutable scratch copies used inside a single step; never escape `step`. */
 export type MutPlayer = { -readonly [K in keyof PlayerState]: PlayerState[K] };
@@ -25,7 +26,7 @@ const NET_DAMPING = 0.8;
  * changes are capped per tick, so players can never teleport.
  */
 export function integratePlayer(p: MutPlayer, cfg: SimConfig, dt: number): void {
-  const pc = cfg.player;
+  const pc = playerPhysics(cfg, p.id);
   const speed = dhypot(p.vx, p.vy);
   let desiredVx = 0;
   let desiredVy = 0;

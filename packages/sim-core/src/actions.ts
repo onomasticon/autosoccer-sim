@@ -6,6 +6,7 @@ import type { Rng } from "./prng.ts";
 import type { MatchState, PlayerId, SimEvent, TeamId } from "./types.ts";
 import { clamp, wrapAngle } from "./vec.ts";
 import { defendedSide } from "./world.ts";
+import { attrScale, ratingDelta } from "./attributes.ts";
 
 export interface ActionContext {
   players: MutPlayer[];
@@ -45,9 +46,12 @@ export function inOwnPenaltyArea(team: TeamId, x: number, y: number, cfg: SimCon
   return fromLine >= 0 && fromLine <= cfg.pitch.penaltyAreaDepth && Math.abs(y) <= cfg.pitch.penaltyAreaWidth / 2;
 }
 
-/** Seeded execution error: larger for harder kicks and tired players. */
-function kickError(power: number, stamina: number, cfg: SimConfig, rng: Rng): number {
-  const scale = cfg.action.kickErrorMax * power * power * (0.5 + 0.5 * (1 - stamina));
+/**
+ * Seeded execution error: larger for harder kicks and tired players. `accuracy` scales it for the
+ * kicker's passing or shooting rating (1 without attributes; 0.56 at 99, 1.66 at 1).
+ */
+function kickError(power: number, stamina: number, cfg: SimConfig, rng: Rng, accuracy = 1): number {
+  const scale = cfg.action.kickErrorMax * power * power * (0.5 + 0.5 * (1 - stamina)) * accuracy;
   // Sum of two uniforms → triangular distribution in [-scale, scale].
   return (rng.float() + rng.float() - 1) * scale;
 }
@@ -91,8 +95,11 @@ function executeAction(ctx: ActionContext, a: ActionCommand, p: MutPlayer): stri
       if (d > ac.kickRange) return `ball out of kick range (${d.toFixed(2)} m > ${ac.kickRange} m)`;
       const angle = Math.abs(wrapAngle(datan2(a.dirY, a.dirX) - p.heading));
       if (angle > ac.kickMaxAngle) return `kick direction ${((angle * 180) / Math.PI).toFixed(0)}° from facing (max ${((ac.kickMaxAngle * 180) / Math.PI).toFixed(0)}°)`;
-      const speed = ac.minKickSpeed + (ac.maxKickSpeed - ac.minKickSpeed) * a.power;
-      const err = kickError(a.power, p.stamina, cfg, rng);
+      // Attributes: shot power scales the top kick speed; passing (soft kicks) or shooting (hard) the error.
+      const maxKick = ac.maxKickSpeed * attrScale(cfg, p.id, "power", 0.12);
+      const speed = ac.minKickSpeed + (maxKick - ac.minKickSpeed) * a.power;
+      const accuracy = attrScale(cfg, p.id, a.power >= 0.75 ? "shooting" : "passing", -0.45);
+      const err = kickError(a.power, p.stamina, cfg, rng, accuracy);
       const dir = launch(ball, p, a.dirX, a.dirY, speed, err);
       p.touchCooldown = ac.kickCooldownTicks;
       ctx.ballPlayed = true;
@@ -115,10 +122,12 @@ function executeAction(ctx: ActionContext, a: ActionCommand, p: MutPlayer): stri
           victim = q;
         }
       }
-      let pSuccess = clamp(0.25 + 0.7 * (1 - d / ac.tackleReach), 0.05, 0.95);
-      // Ball control: a player with the ball at their feet shields it.
+      // Attributes: ±12 points of success chance for tackling at the extremes.
+      let pSuccess = clamp(0.25 + 0.7 * (1 - d / ac.tackleReach) + 0.12 * ratingDelta(cfg, p.id, "tackling"), 0.05, 0.95);
+      // Ball control: a player with the ball at their feet shields it (better on the ball, better shield).
       const control = ac.controlChance ?? 0;
-      if (control > 0 && victim && ball.lastTouch === victim.id && vd <= ac.dribbleRange) pSuccess *= 1 - 0.4 * control;
+      if (control > 0 && victim && ball.lastTouch === victim.id && vd <= ac.dribbleRange)
+        pSuccess *= 1 - 0.4 * control * attrScale(cfg, victim.id, "control", 0.3);
       p.tackleCooldown = ac.tackleCooldownTicks;
       if (rng.float() < pSuccess) {
         // Poke the ball away from the tackler, through the ball.
@@ -147,10 +156,16 @@ function executeAction(ctx: ActionContext, a: ActionCommand, p: MutPlayer): stri
       if (p.catchCooldown > 0) return `catch cooldown (${p.catchCooldown} ticks)`;
       if (!inOwnPenaltyArea(p.team, ball.x, ball.y, cfg, ctx.match)) return "ball is outside the goalkeeper's own penalty area";
       if (!inOwnPenaltyArea(p.team, p.x, p.y, cfg, ctx.match)) return "goalkeeper is outside own penalty area";
-      if (d > ac.catchReach) return `ball out of catch reach (${d.toFixed(2)} m > ${ac.catchReach} m)`;
+      // Attributes: goalkeeping scales reach (±15%) and adds up to ±10 points of catch chance.
+      const reach = ac.catchReach * attrScale(cfg, p.id, "goalkeeping", 0.15);
+      if (d > reach) return `ball out of catch reach (${d.toFixed(2)} m > ${reach.toFixed(2)} m)`;
       const rel = dhypot(ball.vx - p.vx, ball.vy - p.vy);
       if (rel > ac.catchMaxSpeed) return `ball too fast to catch (${rel.toFixed(1)} m/s)`;
-      const pSuccess = clamp(0.97 - (rel / ac.catchMaxSpeed) * 0.5 - (d / ac.catchReach) * 0.15, 0.2, 0.97);
+      const pSuccess = clamp(
+        0.97 - (rel / ac.catchMaxSpeed) * 0.5 - (d / reach) * 0.15 + 0.1 * ratingDelta(cfg, p.id, "goalkeeping"),
+        0.2,
+        0.97,
+      );
       p.catchCooldown = ac.catchCooldownTicks;
       if (rng.float() < pSuccess) {
         ball.heldBy = p.id;
@@ -174,7 +189,7 @@ function executeAction(ctx: ActionContext, a: ActionCommand, p: MutPlayer): stri
     case "release": {
       if (ball.heldBy !== p.id) return "player is not holding the ball";
       const speed = Math.min(ac.maxReleaseSpeed, ac.minKickSpeed + (ac.maxKickSpeed - ac.minKickSpeed) * a.power);
-      const err = kickError(a.power * 0.7, p.stamina, cfg, rng);
+      const err = kickError(a.power * 0.7, p.stamina, cfg, rng, attrScale(cfg, p.id, "passing", -0.45));
       ball.heldBy = null;
       ball.holdTicks = 0;
       launch(ball, p, a.dirX, a.dirY, speed, err);
@@ -229,7 +244,7 @@ export function resolveAutoTouches(ctx: ActionContext): void {
         continue;
       }
       const q = rel / ac.trapMaxSpeed;
-      const pSuccess = clamp(1 - q * q * 0.8, 0.1, 0.97);
+      const pSuccess = clamp(1 - q * q * 0.8 + 0.1 * ratingDelta(cfg, p.id, "control"), 0.1, 0.97);
       if (rng.float() < pSuccess) {
         // Cushion the ball to the player's velocity, slightly ahead of them.
         ball.vx = p.vx + dcos(p.heading) * 0.4;
@@ -262,7 +277,8 @@ export function resolveAutoTouches(ctx: ActionContext): void {
       if (ahead >= 0.25) {
         // Ball in front: knock it on, just ahead of the player's pace.
         const along = Math.max(0, p.vx * ux + p.vy * uy);
-        const touchSpeed = along + ac.dribbleTouchBoost;
+        // Better ball control keeps the ball closer (a smaller push ahead).
+        const touchSpeed = along + ac.dribbleTouchBoost * attrScale(cfg, p.id, "control", -0.3);
         ball.vx = ux * touchSpeed;
         ball.vy = uy * touchSpeed;
         p.touchCooldown = ac.dribbleCooldownTicks;
@@ -293,7 +309,7 @@ export function resolveAutoTouches(ctx: ActionContext): void {
       // Collect: a player reaching a loose or slow ball usually settles it at their feet.
       const lastTeam = ball.lastTouch ? teamOf(ball.lastTouch) : null;
       p.touchCooldown = ac.trapCooldownTicks;
-      if (rng.float() < control) {
+      if (rng.float() < Math.min(0.98, control * attrScale(cfg, p.id, "control", 0.12))) {
         ball.vx = p.vx;
         ball.vy = p.vy;
         ball.lastTouch = p.id;
