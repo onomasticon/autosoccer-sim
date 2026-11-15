@@ -93,6 +93,14 @@ export interface ActionConfig {
   /** Keeper must release within this many ticks or the ball is dropped. */
   maxHoldTicks: number;
   maxReleaseSpeed: number;
+  /**
+   * Ball control (engine 0.5, opt-in; absent or 0 keeps the original model, so older replays
+   * re-step exactly). The chance that a player who reaches a loose ball settles it at their feet
+   * instead of letting it bounce off. When it's on, dribble touches steer the ball toward where the
+   * player is going (so they can turn with it), and tackles succeed less often against a player
+   * shielding the ball.
+   */
+  controlChance?: number;
 }
 
 /** Match flow and restart rules (M3). */
@@ -213,7 +221,7 @@ export const DEFAULT_CONFIG: SimConfig = Object.freeze({
 }) as SimConfig;
 
 /** Team sizes the engine has formations for. */
-export const SUPPORTED_TEAM_SIZES = [5, 7] as const;
+export const SUPPORTED_TEAM_SIZES = [5, 7, 11] as const;
 export type TeamSize = (typeof SUPPORTED_TEAM_SIZES)[number];
 
 /**
@@ -231,6 +239,33 @@ export const SEVEN_A_SIDE: ConfigOverrides = Object.freeze({
     penaltyAreaWidth: 18,
     centreCircleRadius: 5,
   }),
+}) as ConfigOverrides;
+
+/**
+ * Overrides for 11-a-side: 74×48 m, so space per player stays close to 5v5
+ * (3552 m² / 22 players ≈ 161 m²), with a 6 m goal and an 11×26 m box.
+ */
+export const ELEVEN_A_SIDE: ConfigOverrides = Object.freeze({
+  playersPerTeam: 11,
+  pitch: Object.freeze({
+    length: 74,
+    width: 48,
+    goalWidth: 6,
+    goalDepth: 1.5,
+    penaltyAreaDepth: 11,
+    penaltyAreaWidth: 26,
+    centreCircleRadius: 6,
+  }),
+}) as ConfigOverrides;
+
+/**
+ * Ball control (engine 0.5): players settle loose balls most of the time, the ball comes off a
+ * player softly instead of bouncing away, dribbling can turn, and shielding makes tackles harder.
+ * Combine with a team-size preset: `makeConfig({ ...ELEVEN_A_SIDE, ...BALL_CONTROL })`.
+ */
+export const BALL_CONTROL: ConfigOverrides = Object.freeze({
+  ball: Object.freeze({ playerRestitution: 0.15 }),
+  action: Object.freeze({ controlChance: 0.85 }),
 }) as ConfigOverrides;
 
 export type ConfigOverrides = {
@@ -259,6 +294,8 @@ export function validateConfig(cfg: SimConfig): void {
     throw new Error(`playersPerTeam must be one of ${SUPPORTED_TEAM_SIZES.join(", ")}`);
   if (cfg.halfDurationSec <= 0) throw new Error("match duration must be positive");
   if (cfg.halves !== 2) throw new Error("matches have exactly two halves");
+  const cc = cfg.action.controlChance;
+  if (cc !== undefined && !(cc >= 0 && cc <= 1)) throw new Error("action.controlChance must be in [0, 1]");
 }
 
 /** Physics ticks between controller decisions (6 at 60 Hz / 10 Hz). */

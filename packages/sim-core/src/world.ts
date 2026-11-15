@@ -29,9 +29,24 @@ export const FORMATION_7: ReadonlyArray<FormationSlot> = [
   { number: 7, role: "FW", fx: -0.13, fy: 0.3 },
 ];
 
+/** 11-a-side kickoff shape: 4-4-2, numbered back to front (2–5 defenders, 6–9 midfielders, 10–11 forwards). */
+export const FORMATION_11: ReadonlyArray<FormationSlot> = [
+  { number: 1, role: "GK", fx: -0.94, fy: 0 },
+  { number: 2, role: "DF", fx: -0.66, fy: -0.62 },
+  { number: 3, role: "DF", fx: -0.66, fy: 0.62 },
+  { number: 4, role: "DF", fx: -0.7, fy: -0.22 },
+  { number: 5, role: "DF", fx: -0.7, fy: 0.22 },
+  { number: 6, role: "MF", fx: -0.36, fy: -0.66 },
+  { number: 7, role: "MF", fx: -0.4, fy: -0.2 },
+  { number: 8, role: "MF", fx: -0.4, fy: 0.2 },
+  { number: 9, role: "MF", fx: -0.36, fy: 0.66 },
+  { number: 10, role: "FW", fx: -0.1, fy: -0.32 },
+  { number: 11, role: "FW", fx: -0.12, fy: 0.3 },
+];
+
 /** Kickoff shape for a team size (validated by validateConfig). */
 export function formationFor(config: Pick<SimConfig, "playersPerTeam">): ReadonlyArray<FormationSlot> {
-  return config.playersPerTeam === 7 ? FORMATION_7 : FORMATION;
+  return config.playersPerTeam === 11 ? FORMATION_11 : config.playersPerTeam === 7 ? FORMATION_7 : FORMATION;
 }
 
 export const TEAMS: readonly TeamId[] = ["blue", "red"];
