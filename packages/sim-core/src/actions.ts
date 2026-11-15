@@ -115,7 +115,10 @@ function executeAction(ctx: ActionContext, a: ActionCommand, p: MutPlayer): stri
           victim = q;
         }
       }
-      const pSuccess = clamp(0.25 + 0.7 * (1 - d / ac.tackleReach), 0.05, 0.95);
+      let pSuccess = clamp(0.25 + 0.7 * (1 - d / ac.tackleReach), 0.05, 0.95);
+      // Ball control: a player with the ball at their feet shields it.
+      const control = ac.controlChance ?? 0;
+      if (control > 0 && victim && ball.lastTouch === victim.id && vd <= ac.dribbleRange) pSuccess *= 1 - 0.4 * control;
       p.tackleCooldown = ac.tackleCooldownTicks;
       if (rng.float() < pSuccess) {
         // Poke the ball away from the tackler, through the ball.
@@ -194,6 +197,12 @@ export function resolveAutoTouches(ctx: ActionContext): void {
   const { players, ball, cfg, rng, events } = ctx;
   const ac = cfg.action;
   if (ctx.ballPlayed || ball.heldBy !== null || ball.inGoal !== null) return;
+  const control = ac.controlChance ?? 0;
+  // Ball control: the last player to touch the ball, still close to it and on their feet, is shielding it.
+  const shielder =
+    control > 0 && ball.lastTouch !== null
+      ? players.find((q) => q.id === ball.lastTouch && q.stunned === 0 && distToBall(q, ball) <= ac.dribbleRange)
+      : undefined;
   const order = players
     .filter((p) => p.stunned === 0 && p.touchCooldown === 0)
     .map((p) => ({ p, d: distToBall(p, ball) }))
@@ -226,6 +235,48 @@ export function resolveAutoTouches(ctx: ActionContext): void {
         ball.lastTouch = p.id;
         ctx.ballPlayed = true;
         events.push({ type: "trap", playerId: p.id, interception, incomingSpeed: rel });
+        return;
+      }
+      events.push({ type: "trapMiss", playerId: p.id, incomingSpeed: rel });
+      continue;
+    }
+
+    if (control > 0 && p.intent.dribble && d <= ac.dribbleRange) {
+      // Close control: touch the ball toward where the player is going, so they can turn with it.
+      let ux = dcos(p.heading);
+      let uy = dsin(p.heading);
+      if (p.intent.targetX !== null && p.intent.targetY !== null) {
+        const tx = p.intent.targetX - p.x;
+        const ty = p.intent.targetY - p.y;
+        const tl = dhypot(tx, ty);
+        if (tl > 0.3) {
+          ux = tx / tl;
+          uy = ty / tl;
+        }
+      }
+      const ahead = (ball.x - p.x) * ux + (ball.y - p.y) * uy;
+      if (ahead < -0.1) continue; // ball is behind: turn round it first
+      const along = Math.max(0, p.vx * ux + p.vy * uy);
+      const touchSpeed = along + ac.dribbleTouchBoost;
+      ball.vx = ux * touchSpeed;
+      ball.vy = uy * touchSpeed;
+      ball.lastTouch = p.id;
+      p.touchCooldown = ac.dribbleCooldownTicks;
+      ctx.ballPlayed = true;
+      events.push({ type: "dribbleTouch", playerId: p.id });
+      return;
+    }
+
+    if (control > 0 && d <= ac.kickRange && ball.lastTouch !== p.id && (!shielder || shielder.team === p.team)) {
+      // Collect: a player reaching a loose or slow ball usually settles it at their feet.
+      const lastTeam = ball.lastTouch ? teamOf(ball.lastTouch) : null;
+      p.touchCooldown = ac.trapCooldownTicks;
+      if (rng.float() < control) {
+        ball.vx = p.vx;
+        ball.vy = p.vy;
+        ball.lastTouch = p.id;
+        ctx.ballPlayed = true;
+        events.push({ type: "trap", playerId: p.id, interception: lastTeam !== null && lastTeam !== p.team, incomingSpeed: rel });
         return;
       }
       events.push({ type: "trapMiss", playerId: p.id, incomingSpeed: rel });
