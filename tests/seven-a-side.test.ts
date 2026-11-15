@@ -88,7 +88,7 @@ describe("7-a-side", () => {
       config: { ...SEVEN_A_SIDE, halfDurationSec: 5 },
       replayEvery: 1,
     });
-    const note = replay!.decisions.find((d) => d.team === "blue" && d.notes.length)!.notes[0]!;
+    const note = replay!.decisions.find((d) => d.team === "blue" && d.notes?.length)!.notes![0]!;
     expect(JSON.parse(note)).toEqual({ goal: 30, shot: expect.closeTo(1.9, 6), pitch: 60 });
   }, 30_000);
 });
