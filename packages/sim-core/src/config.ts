@@ -1,3 +1,5 @@
+import { attributesError, type PlayerAttributes } from "./attributes.ts";
+
 /**
  * Simulation configuration. All distances are metres, times are seconds,
  * speeds are m/s and accelerations m/s². Origin is the pitch centre; +x points
@@ -141,6 +143,11 @@ export interface SimConfig {
   match: MatchConfig;
   /** Max random offset (m) applied to kickoff formation positions from the seed. */
   formationJitter: number;
+  /**
+   * Player attributes by player ID (engine 0.6, opt-in; see attributes.ts). Players without an
+   * entry, and every player when this is absent, use the base physics and action rules.
+   */
+  players?: Readonly<Record<string, PlayerAttributes>>;
 }
 
 export const DEFAULT_CONFIG: SimConfig = Object.freeze({
@@ -294,6 +301,8 @@ export function validateConfig(cfg: SimConfig): void {
     throw new Error(`playersPerTeam must be one of ${SUPPORTED_TEAM_SIZES.join(", ")}`);
   if (cfg.halfDurationSec <= 0) throw new Error("match duration must be positive");
   if (cfg.halves !== 2) throw new Error("matches have exactly two halves");
+  const attrErr = attributesError(cfg.players);
+  if (attrErr) throw new Error(attrErr);
   const cc = cfg.action.controlChance;
   if (cc !== undefined && !(cc >= 0 && cc <= 1)) throw new Error("action.controlChance must be in [0, 1]");
 }

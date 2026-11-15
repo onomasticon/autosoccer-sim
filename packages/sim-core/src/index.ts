@@ -2,8 +2,9 @@
  * @autosoccer/sim-core — headless deterministic small-sided (5, 7 or 11-a-side) soccer simulation.
  * No DOM, no timers, no Math.random: everything is driven by `step`.
  */
-export const ENGINE_VERSION = "0.5.0";
+export const ENGINE_VERSION = "0.6.0";
 
+export * from "./attributes.ts";
 export * from "./config.ts";
 export * from "./prng.ts";
 export * from "./dmath.ts";
