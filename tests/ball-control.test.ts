@@ -94,6 +94,14 @@ describe("ball control (opt-in)", () => {
     expect(dist(s, "blue-4")).toBeLessThan(1.5);
   });
 
+  it("turns right round with the ball: it's rolled round the foot, not left behind", () => {
+    const s0 = setup(CONTROL, { "blue-4": { x: -0.6, y: 0, heading: 0 } }, { x: 0, y: 0 }, 4);
+    const s1 = { ...s0, ball: { ...s0.ball, lastTouch: "blue-4" as PlayerId } };
+    const { s } = run(CONTROL, s1, 150, (i) => (i === 0 ? [{ type: "moveTo", playerId: "blue-4", x: -12, y: 0, dribble: true }] : []));
+    expect(s.ball.x).toBeLessThan(-5); // carried back the way the player came
+    expect(dist(s, "blue-4")).toBeLessThan(1.5);
+  });
+
   it("an opponent can't just collect a ball a player is shielding; they have to tackle", () => {
     const s0 = setup(CONTROL, { "blue-4": { x: -0.55, y: 0, heading: 0 }, "red-3": { x: 0.6, y: 0.1, heading: Math.PI } }, { x: 0, y: 0 }, 5);
     const s1 = { ...s0, ball: { ...s0.ball, lastTouch: "blue-4" as PlayerId } };

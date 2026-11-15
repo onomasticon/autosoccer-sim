@@ -6,7 +6,7 @@
  *   1.1: `Soccer` helper library in the sandbox; optional `debug` output from update.
  *   1.2: observation numbers rounded to 4 decimals (performance; shape unchanged).
  *   1.3: 7-a-side support: shirt refs up to the team size; `Soccer` helpers use the match pitch (`Soccer.pitch`).
- *   1.4: 11-a-side support (shirt refs up to 11).
+ *   1.4: 11-a-side support (shirt refs up to 11); `rules.dribbleRange` and `rules.controlChance` (ball control).
  *
  * Controllers see only plain JSON observations (built here from the world
  * state; no engine references) and return plain JSON actions, which are
@@ -115,6 +115,10 @@ export interface MatchInfo {
     maxKickSpeed: number;
     tackleReach: number;
     catchReach: number;
+    /** Max player→ball distance for a dribble touch (SDK 1.4). */
+    dribbleRange: number;
+    /** Chance a player settles a loose ball they reach; 0 when the match has no ball control (SDK 1.4). */
+    controlChance: number;
     restartDistance: number;
     restartTimeoutDecisions: number;
   };
@@ -243,6 +247,8 @@ export function buildMatchInfo(state: WorldState, team: TeamId, cfg: SimConfig =
       maxKickSpeed: a.maxKickSpeed,
       tackleReach: a.tackleReach,
       catchReach: a.catchReach,
+      dribbleRange: a.dribbleRange,
+      controlChance: a.controlChance ?? 0,
       restartDistance: cfg.match.restartDistance,
       restartTimeoutDecisions: Math.floor(cfg.match.restartTimeoutTicks / (cfg.tickRate / cfg.controllerRate)),
     },

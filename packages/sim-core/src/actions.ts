@@ -216,9 +216,11 @@ export function resolveAutoTouches(ctx: ActionContext): void {
     // Ball approaching the player?
     const approaching = (ball.x - p.x) * relX + (ball.y - p.y) * relY < 0;
 
-    // Trapping needs a genuinely moving ball, not a player running into a still one.
+    // Trapping needs a genuinely moving ball, not a player running into a still one
+    // (nor, with ball control, a ball the player is already dribbling).
     const ballSpeed = dhypot(ball.vx, ball.vy);
-    if (ballSpeed >= ac.trapMinSpeed && rel >= ac.trapMinSpeed && approaching && d <= ac.kickRange) {
+    const ownBall = control > 0 && ball.lastTouch === p.id;
+    if (!ownBall && ballSpeed >= ac.trapMinSpeed && rel >= ac.trapMinSpeed && approaching && d <= ac.kickRange) {
       const lastTeam = ball.lastTouch ? teamOf(ball.lastTouch) : null;
       const interception = lastTeam !== null && lastTeam !== p.team;
       p.touchCooldown = ac.trapCooldownTicks;
@@ -254,14 +256,34 @@ export function resolveAutoTouches(ctx: ActionContext): void {
           uy = ty / tl;
         }
       }
-      const ahead = (ball.x - p.x) * ux + (ball.y - p.y) * uy;
-      if (ahead < -0.1) continue; // ball is behind: turn round it first
-      const along = Math.max(0, p.vx * ux + p.vy * uy);
-      const touchSpeed = along + ac.dribbleTouchBoost;
-      ball.vx = ux * touchSpeed;
-      ball.vy = uy * touchSpeed;
+      const rx = ball.x - p.x;
+      const ry = ball.y - p.y;
+      const ahead = rx * ux + ry * uy;
+      if (ahead >= 0.25) {
+        // Ball in front: knock it on, just ahead of the player's pace.
+        const along = Math.max(0, p.vx * ux + p.vy * uy);
+        const touchSpeed = along + ac.dribbleTouchBoost;
+        ball.vx = ux * touchSpeed;
+        ball.vy = uy * touchSpeed;
+        p.touchCooldown = ac.dribbleCooldownTicks;
+      } else {
+        // Ball beside or behind: roll it round the foot toward the new direction (a turn), via
+        // the side it's already on so it never passes through the player.
+        const nx = -uy;
+        const ny = ux;
+        const side = rx * nx + ry * ny >= 0 ? 1 : -1;
+        const r = cfg.player.radius + cfg.ball.radius + 0.12;
+        const aimX = ahead > -0.15 ? p.x + ux * r : p.x + nx * side * r + ux * 0.15;
+        const aimY = ahead > -0.15 ? p.y + uy * r : p.y + ny * side * r + uy * 0.15;
+        const gx = aimX - ball.x;
+        const gy = aimY - ball.y;
+        const gl = dhypot(gx, gy) || 1;
+        const roll = Math.min(3, gl * 8);
+        ball.vx = p.vx + (gx / gl) * roll;
+        ball.vy = p.vy + (gy / gl) * roll;
+        p.touchCooldown = Math.max(1, Math.round(ac.dribbleCooldownTicks / 2));
+      }
       ball.lastTouch = p.id;
-      p.touchCooldown = ac.dribbleCooldownTicks;
       ctx.ballPlayed = true;
       events.push({ type: "dribbleTouch", playerId: p.id });
       return;
